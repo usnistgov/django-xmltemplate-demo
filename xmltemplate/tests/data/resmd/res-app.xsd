@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema targetNamespace="http://schema.nist.gov/xml/res-md-app/1.0wd" 
+           xmlns="http://www.w3.org/2001/XMLSchema" 
+           xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+           xmlns:rsm="http://schema.nist.gov/xml/res-md/1.0wd" 
+           xmlns:am="http://schema.nist.gov/xml/nmrr.schema.annot" 
+           elementFormDefault="unqualified" 
+           attributeFormDefault="unqualified" version="0.9">
+
+   <xs:annotation>
+      <xs:documentation>
+        a schema that provides a global element for the registry.
+      </xs:documentation>
+   </xs:annotation>
+
+   <xs:import namespace="http://schema.nist.gov/xml/res-md/1.0wd"
+              schemaLocation="res-md.xsd"/>
+   
+   <xs:element name="Resource" type="rsm:Resource"/>
+
+</xs:schema>

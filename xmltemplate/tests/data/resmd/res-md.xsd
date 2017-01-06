@@ -1,0 +1,1019 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema targetNamespace="http://schema.nist.gov/xml/res-md/1.0wd" 
+           xmlns="http://www.w3.org/2001/XMLSchema" 
+           xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+           xmlns:rsm="http://schema.nist.gov/xml/res-md/1.0wd" 
+           xmlns:am="http://schema.nist.gov/xml/nmrr.schema.annot" 
+           elementFormDefault="unqualified" 
+           attributeFormDefault="unqualified" version="0.9">
+
+   <xs:annotation>
+      <xs:documentation>
+        A metadata schema for describing resources in a research data 
+        federation.  This schema can be extended to describe new types
+        of resources and incorporate domain-specific metadata.  
+      </xs:documentation>
+      <xs:documentation>
+        While this schema represents the core of the MGI Resource
+        metadata schema, additional extensions are recommended for
+        describing typical materials resources:  resmd-dcite,
+        resmd-access, and resmd-matsci.
+      </xs:documentation>
+      <xs:documentation>
+        This schema draws on concepts and patterns used in VOResource v1.0 
+        (http://www.ivoa.net/xml/VOResource/v1.0) by Plante et al. 2008,
+        VOResource: an XML Encoding Schema for Resource Metadata, v. 1.03
+        (http://www.ivoa.net/documents/latest/VOResource.html).
+      </xs:documentation>
+   </xs:annotation>
+
+   <xs:import namespace="http://www.w3.org/XML/1998/namespace"
+              schemaLocation="http://www.w3.org/2009/01/xml.xsd"/>
+   
+   <xs:complexType name="Resource">
+      <xs:annotation>
+         <xs:documentation>
+           an identified, described, and discoverable component of the 
+           distributed data environment. 
+         </xs:documentation>
+      </xs:annotation>
+      <xs:sequence>
+
+         <xs:element name="identity" type="rsm:Identity">
+            <xs:annotation>
+               <xs:documentation>
+                  a collection of metadata that help identify the resource in 
+                  various contexts.  It includes its title and unique 
+                  identifiers.
+               </xs:documentation>
+               <xs:documentation>
+                  Note that the ensemble of metadata contained here do not 
+                  define the identity uniquely and unambiguously; rather, 
+                  any of the given identifier element values (and only 
+                  those values) can do that for the context of that identifier.  
+               </xs:documentation>
+            </xs:annotation>
+         </xs:element>
+
+         <xs:element name="curation" type="rsm:Curation">
+           <xs:annotation>
+             <xs:documentation>
+               Information regarding the general curation of the resource
+             </xs:documentation>
+           </xs:annotation>
+         </xs:element>
+
+         <xs:element name="content" type="rsm:Content">
+           <xs:annotation>
+             <xs:documentation>
+               General information describing what the resource is and,
+               as appropriate, what it contains.
+             </xs:documentation>
+           </xs:annotation>
+         </xs:element>
+
+         <xs:element name="role" type="rsm:Role"
+                     minOccurs="1" maxOccurs="unbounded">
+           <xs:annotation>
+             <xs:documentation>
+               A label that identifies the type of resource this is along
+               with, if appropriate, a description of how this resource
+               fulfills its role as a that type of resource.
+             </xs:documentation>
+             <xs:documentation>
+               If this resource qualifies as being like multiple types of
+               resources at a time (e.g. a registry and a repository), multiple
+               role elements can be provided.
+             </xs:documentation>
+             <xs:documentation>
+               Sub-classes of Role can define additional metadata for describing
+               how it fulfills its role.  The xsi:type attribute must be used
+               to include this additional metadata.  
+             </xs:documentation>
+           </xs:annotation>
+         </xs:element>
+
+         <xs:element name="applicability" type="rsm:Applicability"
+                     minOccurs="0" maxOccurs="unbounded">
+           <xs:annotation>
+             <xs:documentation>
+               Information describing the resource's applicability to a 
+               particular domain.
+             </xs:documentation>
+             <xs:documentation>
+               Domain specific metadata gets captured here.  
+             </xs:documentation>
+           </xs:annotation>
+         </xs:element>
+
+         <xs:element name="related" type="rsm:Related"
+                     minOccurs="0" maxOccurs="unbounded">
+           <xs:annotation>
+             <xs:documentation>
+               A reference to a related resource and the nature of the
+               relationship.
+             </xs:documentation>
+           </xs:annotation>
+         </xs:element>
+
+      </xs:sequence>
+
+      <xs:attribute name="localid">
+         <xs:annotation>
+            <xs:documentation>
+              An unambiguous identifier for this resource description as 
+              assigned by its author or its curating registry.  
+            </xs:documentation>
+            <xs:documentation>
+              This attribute is required on export.
+            </xs:documentation>
+            <xs:documentation>
+              Authors may use this identifier for a proxy ID for the underlying
+              resource if one does not exist; if so desired, this ID should be
+              replicated as an identifier under the identity section.
+            </xs:documentation>
+         </xs:annotation>
+      </xs:attribute>
+
+      <xs:attribute name="status" use="required">
+         <xs:annotation>
+            <xs:documentation>
+              a tag indicating whether this resource is believed to be still
+              actively maintained.
+            </xs:documentation>
+         </xs:annotation>
+         <xs:simpleType>
+            <xs:restriction base="xs:string">
+               <xs:enumeration value="active">
+                 <xs:annotation>
+                   <xs:documentation>
+                      resource is believed to be currently maintained, and its
+                      description is up to date (default). 
+                   </xs:documentation>
+                 </xs:annotation>
+               </xs:enumeration>
+               <xs:enumeration value="inactive">
+                 <xs:annotation>
+                   <xs:documentation>
+                     resource is apparently not being maintained at the present.
+                   </xs:documentation>
+                 </xs:annotation>
+               </xs:enumeration>
+               <xs:enumeration value="deleted">
+                 <xs:annotation>
+                   <xs:documentation>
+                      resource publisher has explicitly deleted the resource.
+                   </xs:documentation>
+                 </xs:annotation>
+               </xs:enumeration>
+            </xs:restriction>
+         </xs:simpleType>
+      </xs:attribute>
+   </xs:complexType>
+
+   <xs:complexType name="Identity">
+     <xs:annotation>
+       <xs:documentation>
+         a collection of metadata describing the identity of a resource
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+         <xs:element name="title" type="xs:token">
+            <xs:annotation>
+               <xs:appinfo>
+                 <am:dcterm>Title</am:dcterm>
+                 <am:dataciteproperty>Title</am:dataciteproperty>
+               </xs:appinfo>           
+               <xs:documentation>
+                  the full name given to the resource
+               </xs:documentation>
+            </xs:annotation>
+         </xs:element>
+
+         <xs:element name="altTitle" type="rsm:AltTitle"
+                     minOccurs="0" maxOccurs="unbounded">
+            <xs:annotation>
+               <xs:appinfo>
+                 <am:dcterm>Title</am:dcterm>
+                 <am:dataciteproperty>Title</am:dataciteproperty>
+                 <am:comment>inspired by datacite Title</am:comment>
+               </xs:appinfo>           
+               <xs:documentation>
+                  an additional name the resource is known by
+               </xs:documentation>
+            </xs:annotation>
+         </xs:element>
+
+         <xs:element name="shortName" type="xs:token" minOccurs="0">
+            <xs:annotation>
+               <xs:documentation>
+                 a short name or abbreviation given to the resource.
+               </xs:documentation>
+               <xs:documentation>
+                 This name will be used where brief annotations for
+                 the resource name are required.  Applications may 
+                 use this to refer to this resource in a compact display.  
+                 This is NOT expected to be globally unique; thus, it 
+                 should not be used as an identifier.  
+               </xs:documentation>
+               <xs:documentation>
+                 One word or a few letters is recommended.  
+               </xs:documentation>
+            </xs:annotation>
+         </xs:element>
+
+         <xs:element name="version" type="xs:token" minOccurs="0">
+            <xs:annotation>
+               <xs:documentation>
+                 Label a particular release or variation of the resource.
+               </xs:documentation>
+               <xs:documentation>
+                 Different versions of a resource typically share the same
+                 title.  
+               </xs:documentation>
+            </xs:annotation>
+         </xs:element>
+
+         <xs:element name="identifier" type="xs:anyURI" 
+                     minOccurs="0" maxOccurs="unbounded">
+            <xs:annotation>
+               <xs:appinfo>
+                 <am:dcterm>Identifier</am:dcterm>
+               </xs:appinfo>           
+               <xs:documentation>
+                 Unambiguous reference to the resource using a recognized 
+                 identifier system.  
+               </xs:documentation>
+               <xs:documentation>
+                 Multiple identifiers can be given if the resource is 
+                 identified in multiple identifier systems.  
+               </xs:documentation>
+            </xs:annotation>
+         </xs:element>
+       
+        <xs:element name="logo" type="xs:anyURI" minOccurs="0">
+           <xs:annotation>
+              <xs:documentation>
+                URL pointing to a graphical logo, which may be used to help 
+                identify the information source
+              </xs:documentation>
+           </xs:annotation>
+        </xs:element>
+
+     </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="AltTitle">
+     <xs:annotation>
+       <xs:documentation>
+         a title string that can indicate its role as an alternative title.
+       </xs:documentation>
+       <xs:documentation>
+         use of the xml:lang attribute is recommended when applicable
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:simpleContent>
+       <xs:extension base="xs:token"> 
+
+         <xs:attribute name="type" type="rsm:TitleType" use="required">
+            <xs:annotation>
+              <xs:appinfo>
+                <am:comment>inspired by datacite titleType</am:comment>
+                <am:dataciteproperty>titleType</am:dataciteproperty>
+              </xs:appinfo>
+              <xs:documentation>
+                The role of this title.
+              </xs:documentation>
+              <xs:documentation>
+                This is intended to help consumers properly display the title.
+              </xs:documentation>
+            </xs:annotation>
+         </xs:attribute>
+
+         <xs:attribute ref="xml:lang">
+            <xs:annotation>
+              <xs:documentation>
+                The language this title is given in
+              </xs:documentation>
+            </xs:annotation>
+         </xs:attribute>
+
+       </xs:extension>       
+     </xs:simpleContent>
+   </xs:complexType>
+
+   <xs:simpleType name="TitleType">
+     <xs:annotation>
+       <xs:documentation>
+         Allowed values for the AltTitle's type attribute
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:restriction base="xs:string">
+       <xs:enumeration value="AlternativeTitle">
+         <xs:annotation>
+           <xs:documentation>
+             title value represents an alternate or often used title for the
+             resource, but which is not its official or preferred title.
+           </xs:documentation>
+         </xs:annotation>
+       </xs:enumeration>
+
+       <xs:enumeration value="Subtitle">
+         <xs:annotation>
+           <xs:documentation>
+             title value represents a secondary or subtitle for the resource
+           </xs:documentation>
+         </xs:annotation>
+       </xs:enumeration>
+
+       <xs:enumeration value="TranslatedTitle">
+         <xs:annotation>
+           <xs:documentation>
+             title value represents a title in an alternate language as given
+             by the xml:lang attribute.  
+           </xs:documentation>
+         </xs:annotation>
+       </xs:enumeration>
+         
+     </xs:restriction>
+   </xs:simpleType>
+        
+   <xs:complexType name="Curation">
+     <xs:annotation>
+       <xs:documentation>
+         Information regarding the general curation of a resource
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+       <xs:element name="publisher" type="rsm:NamePID">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:dcterm>Publisher</am:dcterm>
+             </xs:appinfo>
+             <xs:documentation>
+               Entity (e.g. person or organisation) responsible for making the 
+               resource available.  
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="publicationYear" type="rsm:Year" minOccurs="0">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:datacite>publicationYear</am:datacite>
+             </xs:appinfo>
+             <xs:documentation>
+               The year that this resource was made available by the publisher.
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="creator" type="rsm:Person" 
+                   minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:dcterm>Creator</am:dcterm>
+             </xs:appinfo>
+             <xs:documentation>
+               The entity (e.g. person or organization) primarily responsible 
+               for creating the content or constitution of the resource.
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="contributor" type="rsm:Person" 
+                   minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:dcterm>Contributor</am:dcterm>
+             </xs:appinfo>
+             <xs:documentation>
+               Entity responsible for contributions to the development of
+               the resource
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="date" type="rsm:Date" 
+                   minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:dcterm>Date</am:dcterm>
+             </xs:appinfo>
+             <xs:documentation>
+               Date associated with an event in the life cycle of the
+               resource.  
+             </xs:documentation>
+             <xs:documentation>
+               This will typically be associated with the creation or 
+               availability (i.e., most recent release or version) of
+               the resource.  Use the role attribute to clarify.  
+             </xs:documentation>
+             <xs:documentation>
+                Since the Date type is abstract, one must describe
+                the interface using a subclass of Date, denoting
+                it via xsi:type.
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="contact" type="rsm:Contact" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:documentation>
+               Information that can be used for contacting someone with
+               regard to this resource.
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+     </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="NamePID">
+     <xs:annotation>
+       <xs:documentation>
+         a name or title that can potentially have an associated identifier.
+       </xs:documentation>
+       <xs:documentation>
+         The string-valued name is intended for display purposes.  The identifier
+         provides unambiguous identification; thus, providing it is recommended
+         when available.  
+       </xs:documentation>
+       <xs:documentation>
+         NMRR Notes:  use only NMRR-internal identifiers here.  
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:simpleContent>
+       <xs:extension base="xs:token"> 
+
+         <xs:attribute name="pid" type="xs:anyURI">
+            <xs:annotation>
+              <xs:documentation>
+                An unambigous identifier for the intended entity having 
+                the name given by this element's value.
+              </xs:documentation>
+            </xs:annotation>
+         </xs:attribute>
+
+       </xs:extension>       
+     </xs:simpleContent>
+   </xs:complexType>
+
+   <xs:complexType name="PersonName">
+     <xs:annotation>
+       <xs:documentation>
+         A representation of a person's name or position
+       </xs:documentation>
+       <xs:documentation>
+         The content is intended to provide the name as it should be presented
+         in a display.  It can either be an actual name (e.g. "John P. Doe")
+         or a role (e.g. "Archive Help Desk"). 
+       </xs:documentation>
+       <xs:documentation>
+         The optional sur, given, and middle attributes can be provided to
+         help dissect the name when converting to other formats or renderings.
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:simpleContent>
+       <xs:extension base="rsm:NamePID">
+
+         <xs:attribute name="sur" type="xs:string">
+            <xs:annotation>
+              <xs:documentation>
+                The part of the person's name that should be considered the
+                surname or family name.
+              </xs:documentation>
+            </xs:annotation>           
+         </xs:attribute>
+         
+         <xs:attribute name="given" type="xs:string">
+            <xs:annotation>
+              <xs:documentation>
+                The part of the person's name that should be considered the
+                given or first name.
+              </xs:documentation>
+            </xs:annotation>           
+         </xs:attribute>
+         
+         <xs:attribute name="middle" type="xs:string">
+            <xs:annotation>
+              <xs:documentation>
+                The part of the person's name that should be considered the
+                middle names or initials.  
+              </xs:documentation>
+            </xs:annotation>           
+         </xs:attribute>
+         
+       </xs:extension>
+     </xs:simpleContent>
+   </xs:complexType>
+
+   <xs:complexType name="Person">
+     <xs:annotation>
+       <xs:documentation>
+         A representation of a person
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+       <xs:element name="name" type="rsm:PersonName">
+          <xs:annotation>
+             <xs:documentation>
+                 the name or title of the contact person.
+             </xs:documentation>
+             <xs:documentation>
+                 This can be a person's name, e.g. "John P. Jones" or
+                 a group, "Archive Support Team".
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="affiliation" type="rsm:NamePID" minOccurs="0">
+          <xs:annotation>
+             <xs:documentation>
+               the name of the institute or organization that this
+               person was affiliated with when the person contributed
+               to this resource.
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+     </xs:sequence>
+
+   </xs:complexType>   
+
+   <xs:simpleType name="Year">
+     <xs:annotation>
+       <xs:documentation>
+         An A.D. year date with format YYYY.
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:restriction base="xs:token">
+        <xs:pattern value="[\d]{4}"/>
+     </xs:restriction>
+   </xs:simpleType>
+
+   <xs:simpleType name="NoTimeDate">
+     <xs:annotation>
+       <xs:documentation>
+         A restricted format for expressing dates compliant with the Datacite
+         date formatting recommendations.  The value is either a single year,
+         month, or day value (compliant with the W3C Note on data formats,
+         http://www.w3.org/TR/NOTE-datetime), or two such values delimited by
+         a slash, indicating a range of values.
+       </xs:documentation>
+       <xs:documentation>
+         Single values are restricted to the following forms:  YYYY, YYYY-MM,
+         or YYYY-MM-DD.  
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:restriction base="xs:token">
+       <xs:pattern value="\d{4}(-\d{2}(-\d{2}(/\d{4}(-\d{2}(-\d{2})?)?)?)?)?"/>
+     </xs:restriction>
+   </xs:simpleType>
+
+   <xs:complexType name="Date" abstract="true">
+     <xs:annotation>
+       <xs:documentation>
+         An abstract type for date elements that can accept qualifying
+         attributes (e.g. see LocalEvent)
+       </xs:documentation>
+       <xs:documentation>
+         Single values are restricted to the following forms:  YYYY, YYYY-MM,
+         or YYYY-MM-DD.  
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:simpleContent>
+       <xs:extension base="rsm:NoTimeDate">
+       </xs:extension>
+     </xs:simpleContent>
+   </xs:complexType>
+
+   <xs:complexType name="LocalEvent">
+     <xs:annotation>
+       <xs:documentation>
+         A date for an event in the lifecycle of a resource that is specific
+         to the publisher or contributor to the resource.  
+       </xs:documentation>
+       <xs:documentation>
+         This allows publishers to indicate customized event dates through an
+         arbitrary role attribute value.  One should prefer the use of 
+         DataciteDate (which controls the value of the role attribute) over
+         LocalEvent if one of the former's controlled values apply.  
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:simpleContent>
+       <xs:extension base="rsm:Date"> 
+
+         <xs:attribute name="role" type="xs:string">
+            <xs:annotation>
+              <xs:documentation>
+                A label indicating the role this date plays in the lifecycle
+                of a resource.  
+              </xs:documentation>
+              <xs:documentation>
+                This date type allows roles that are not covered by the
+                DciteDate type (which is prefered).  This should be used for
+                lifecycle events that are specific in nature to this resource.  
+              </xs:documentation>
+            </xs:annotation>
+         </xs:attribute>
+
+       </xs:extension>       
+     </xs:simpleContent>
+   </xs:complexType>   
+
+   <xs:complexType name="Contact">
+     <xs:annotation>
+       <xs:documentation>
+         Information that can be used for contacting someone
+       </xs:documentation>
+     </xs:annotation>
+     <xs:sequence>
+       <xs:element name="name" type="rsm:PersonName">
+          <xs:annotation>
+             <xs:documentation>
+                 the name or title of the contact person.
+             </xs:documentation>
+             <xs:documentation>
+                 This can be a person's name, e.g. "John P. Jones" or
+                 a group, "Archive Support Team".
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="postalAddress" type="rsm:PostalAddress" minOccurs="0">
+          <xs:annotation>
+             <xs:documentation>the contact mailing address</xs:documentation>
+             <xs:documentation>
+               All components of the mailing address are given in one
+               string, e.g. "3700 San Martin Drive, Baltimore, MD 21218 USA".
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="emailAddress" type="xs:token" minOccurs="0">
+          <xs:annotation>
+             <xs:documentation>the contact email address</xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="phoneNumber" type="xs:token" minOccurs="0">
+          <xs:annotation>
+             <xs:documentation>the contact telephone number</xs:documentation>
+             <xs:documentation>
+               Complete international dialing codes should be given, e.g.
+               "+1-410-338-1234".
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="timeZone" type="rsm:TimeZone" minOccurs="0">
+          <xs:annotation>
+             <xs:documentation>
+               the time zone where the contact typically operates
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+     </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="PostalAddress">
+     <xs:annotation>
+       <xs:documentation>
+         A postal address structured to enable formatting according to
+         local conventions
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+       <xs:element name="addressLine" type="xs:token"
+                   minOccurs="1" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:documentation>
+               One line of the address as it should appear on an envelope.
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+     </xs:sequence>
+
+   </xs:complexType>
+
+   <xs:simpleType name="TimeZone">
+     <xs:annotation>
+       <xs:documentation>
+         A format for expressing a time zone.  It corresponds to the TZ 
+         portion of an ISO 8601 Date (e.g. -0500, +0100)
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:restriction base="xs:token">
+       <xs:pattern value="[+-]\d{4}"/>
+     </xs:restriction>
+   </xs:simpleType>
+
+   <xs:complexType name="Content">
+     <xs:annotation>
+       <xs:documentation>
+         Information regarding the general content of a resource
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+       <xs:element name="description" type="xs:token" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:dcterm>Description</am:dcterm>
+               <am:datacite>description</am:datacite>
+             </xs:appinfo>           
+             <xs:documentation>
+               An account of the nature of the resource
+             </xs:documentation>
+             <xs:documentation>
+               The description may include but is not limited to an abstract, 
+               table of contents, reference to a graphical representation of
+               content or a free-text account of the content.
+             </xs:documentation>
+             <xs:documentation>
+               Each description element represents a separate paragraph; thus,
+               order is significant (i.e. the first occurance is the first
+               paragraph).  The first occurance should give an overall summary.
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="subject" type="rsm:Subject" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:dcterm>Subject</am:dcterm>
+             </xs:appinfo>           
+             <xs:documentation>
+               a topic, object type, or other descriptive keywords 
+               about the resource.  
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="referenceURL" type="xs:anyURI">
+          <xs:annotation>
+             <xs:documentation>
+                URL pointing to a human-readable document describing this 
+                resource.   
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+       <xs:element name="referenceCitation" type="rsm:NamePID" 
+                   minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+             <xs:documentation>
+                a bibliographic reference to a literature article that 
+                discusses this resource.
+             </xs:documentation>
+             <xs:documentation>
+                The value is a human-consumable citation of the reference, such
+                as a formatted bibliographic representation (e.g. used in 
+                an article bibliography).  The pid attribute gives a persistant 
+                or otherwise unambiguous identifier for the article; a DOI
+                is prefered.  
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+       
+       <xs:element name="primaryAudience" type="rsm:Audience" minOccurs="0">
+          <xs:annotation>
+             <xs:appinfo>
+               <am:dcterm>Subject</am:dcterm>
+               <am:dcterm>Subject.Audience</am:dcterm>
+             </xs:appinfo>           
+             <xs:documentation>
+                The primary audience this resource is intended for.
+             </xs:documentation>
+             <xs:documentation>
+                While some resources may be useful at some level to multiple 
+                audiences, this value indicates the primary one intended.  
+             </xs:documentation>
+          </xs:annotation>
+       </xs:element>
+
+     </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="Subject">
+     <xs:annotation>
+       <xs:documentation>
+         a type for expressing a subject keyword that may be drawn from
+         a standard set of keywords
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:simpleContent>
+       <xs:extension base="xs:token">
+         <xs:attribute name="scheme" use="optional" type="xs:string">
+           <xs:annotation>
+             <xs:documentation>
+               a label or classification code indicating the vocabulary that
+               this subject keyword was drawn from
+             </xs:documentation>
+           </xs:annotation>
+         </xs:attribute>
+
+         <xs:attribute name="schemeURI" use="optional" type="xs:anyURI">
+           <xs:annotation>
+             <xs:documentation>
+               The URI identifying or describing the vocabulary that
+               the subject keyword was drawn from
+             </xs:documentation>
+           </xs:annotation>
+         </xs:attribute>
+
+         <xs:attribute name="pid" type="xs:anyURI">
+           <xs:annotation>
+             <xs:documentation>
+               The machine-recognizable URI identifying the specific subject 
+               keyword.
+             </xs:documentation>
+             <xs:documentation>
+               Use this attribute if the keyword corresponds to a subject from
+               an RDF vocabulary.
+             </xs:documentation>
+           </xs:annotation>
+         </xs:attribute>
+
+       </xs:extension>
+     </xs:simpleContent>
+
+   </xs:complexType>
+   
+
+   <xs:simpleType name="Audience">
+     <xs:annotation>
+       <xs:documentation>
+         Controlled vocabulary categorizing an intended audience.
+       </xs:documentation>
+     </xs:annotation>
+     
+     <xs:restriction base="xs:token">
+       <xs:enumeration value="research">
+         <xs:annotation>
+           <xs:documentation>
+             intended for academic and commercial researchers
+           </xs:documentation>
+         </xs:annotation>
+       </xs:enumeration>
+       <xs:enumeration value="education">
+         <xs:annotation>
+           <xs:documentation>
+             intended for formal and informal educational settings
+           </xs:documentation>
+         </xs:annotation>
+       </xs:enumeration>
+       <xs:enumeration value="public outreach">
+         <xs:annotation>
+           <xs:documentation>
+             intended for broad public consumption for purposes of news 
+             and awareness
+           </xs:documentation>
+         </xs:annotation>
+       </xs:enumeration>
+     </xs:restriction>
+   </xs:simpleType>
+
+   <xs:complexType name="Role">
+     <xs:annotation>
+       <xs:documentation>
+         metadata describing the resource's role as a resource of a particular
+         type.  
+       </xs:documentation>
+       <xs:documentation>
+         This base XML type only provides a type label (and possibly an
+         identifier); however, this XML Role type can be extended to support
+         additional metadata applicable only to particular types.  
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+        <xs:element name="type" type="rsm:RoleType">
+          <xs:annotation>
+             <xs:documentation>
+               a label that indicates the kind of resource it is.
+             </xs:documentation>
+             <xs:documentation>
+               This corresponds to the DC element, type.  Values may be drawn,
+               for example, from the DCMI Type Vocabulary.
+             </xs:documentation>
+             <xs:documentation>
+               This label may use any format or convention for these labels.  An
+               xsi:type on this element or on the parent element may be used to
+               imply/enforce a particular format.  
+             </xs:documentation>
+             <xs:documentation>
+               In the absense of xsi:type usage that restricts the labels that
+               can be used, the following format is recommended:
+               the value can be a colon-separated list of
+               of labels in order of most general to most specific
+               (i.e. each the last label represents a more specific term for the 
+               ones that precede it).  Applications may choose to display only 
+               the last label or the entire string, depending on the context.  
+             </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+     </xs:sequence>
+   </xs:complexType>   
+
+   <xs:complexType name="RoleType">
+     <xs:simpleContent>
+       <xs:extension base="xs:token"> 
+
+         <xs:attribute name="pid" type="xs:anyURI">
+            <xs:annotation>
+              <xs:documentation>
+                An unambigous identifier that identifies a resource type having
+                a defined meaning, indicating that this resource is some variety
+                of the resource type given by that meaning.  
+              </xs:documentation>
+              <xs:documentation>
+                An example would a DCMI Type Vocabulary URI like
+                http://purl.org/dc/dcmitype/PhysicalObject.  The label may 
+                indicate that the type is some more precise variety (e.g. a
+                soil sample).
+              </xs:documentation>
+            </xs:annotation>
+         </xs:attribute>
+
+       </xs:extension>       
+     </xs:simpleContent>
+   </xs:complexType>
+
+   <xs:complexType name="Applicability">
+     <xs:annotation>
+       <xs:documentation>
+         metadata describing the resource's applicability to a particular
+         domain.
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+       
+     </xs:sequence>
+   </xs:complexType>
+
+   <xs:complexType name="Related">
+     <xs:annotation>
+       <xs:documentation>
+         metadata describing describing a relationship between resources.
+       </xs:documentation>
+       <xs:documentation>
+         The subject of the relationship is the resource described by this
+         record.
+       </xs:documentation>
+     </xs:annotation>
+
+     <xs:sequence>
+       <xs:element name="relationship" type="rsm:NamePID">
+         <xs:annotation>
+           <xs:documentation>
+             The kind of relationship given by a relationship name
+             and, optionally, a URI.
+           </xs:documentation>
+           <xs:documentation>
+             It is recommended that these relationships be drawn from existing
+             ontologies with corresponding URI identifiers.  
+           </xs:documentation>
+           <xs:documentation>
+             It is recommended that the value given in the element content
+             be a displayable, human-friendly name for the relationship.
+             Subtypes (e.g. DciteRelation) can be used to provide a
+             controlled name where a URI is not defined.  
+           </xs:documentation>
+         </xs:annotation>
+       </xs:element>
+
+       <xs:element name="resource" type="rsm:NamePID"
+                   maxOccurs="unbounded">
+         <xs:annotation>
+           <xs:documentation>
+             The other resource that this resource is related to.
+           </xs:documentation>
+           <xs:documentation>
+             Multiple occurances can be provided to list all other resources
+             that this resource has the given relationship with.  
+           </xs:documentation>
+         </xs:annotation>
+       </xs:element>
+
+     </xs:sequence>
+   </xs:complexType>
+
+</xs:schema>
+
