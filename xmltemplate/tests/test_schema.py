@@ -263,7 +263,6 @@ class TestSchemaLoaderDB(test.TestCase):
         self.assertEquals(base, "{urn:experiments}Equipment")
 
     def test_find_type_in_schemadoc(self):
-        # pdb.set_trace()
         loader = create_loader("experiments.xsd")
         loader.load()
         # pdb.set_trace()

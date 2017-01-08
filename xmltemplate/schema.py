@@ -273,10 +273,10 @@ class SchemaLoader(object):
         """
         self.beprepared()
 
-        sc = SchemaCommon.get_by_name(name=self.name) 
+        sc = SchemaCommon.get_by_name(name=self.name, allowdeleted=True) 
         if not sc:
             sc = SchemaCommon(namespace=self.namespace, name=self.name,
-                               current=0)
+                              current=0)
             sc.save()
 
         sv = SchemaVersion(name=self.name, common=sc, content=self.content, 
@@ -285,8 +285,7 @@ class SchemaLoader(object):
                            location=self.location)
         sv.save()
         if sc.current <= 0:
-            sc.current = sv.version
-            sc.save()
+            Schema(sv).make_current()
 
         for tp in self.global_types:
             gta = GlobalTypeAnnots(name=tp, namespace=self.namespace)

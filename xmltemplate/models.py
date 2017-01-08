@@ -88,6 +88,23 @@ class SchemaCommon(Document):
         """
         return map(lambda s: s.name, SchemaCommon.objects.all())
 
+class RecordStatus(object):
+    status_words = [ "deleted", "available", "current" ]
+    DELETED = 0
+    AVAILABLE = 1
+    IS_CURRENT = 2
+    def __init__(self, statusno):
+        if not isinstance(statusno, int):
+          raise TypeError("RecordStatus(): input not an integer")
+        if statusno not in range(3):
+          raise ValueError("RecordStatus(): status integer out of range [0:3]: "
+                           + statusno)
+        self.val = statusno
+
+    @property
+    def status(self):
+        return self.status_words[statusno]
+RECORD = RecordStatus
     
 class SchemaVersion(Document):
     """
@@ -110,13 +127,13 @@ class SchemaVersion(Document):
                               should be imported into this one.  Each
                               value corresponds to a SchemaCommon record
                               with this name.
-    :property deleted bool:   True is this schema has been deleted from the 
-                              system.
+    :property status int:     integer indicating whether record is deleted (0),
+                              current (2), or otherwise (1)
     :property comment str:    A brief (displayable) comment noting what is 
                               different about this version.
     """
     name      = fields.StringField(unique_with=['version'], required=True)
-    version   = fields.SequenceField()
+    version   = fields.IntField(unique_with=['name'], required=True)
     common    = fields.ReferenceField(SchemaCommon)
     location  = fields.StringField()
     content   = fields.StringField(blank=False)
@@ -124,7 +141,7 @@ class SchemaVersion(Document):
     prefixes  = fields.DictField(default={}, blank=True)
     includes  = fields.ListField(fields.StringField(), default=[], blank=True)
     imports   = fields.ListField(fields.StringField(), default=[], blank=True)
-    deleted   = fields.BooleanField(blank=False, default=False)
+    status    = fields.IntField(blank=False, default=1)
     comment   = fields.StringField(default="")
 
     @classmethod
@@ -138,7 +155,7 @@ class SchemaVersion(Document):
         """
         vers = SchemaVersion.objects.filter(name=name)
         if not include_deleted:
-            vers = vers.filter(deleted=False)
+            vers = vers.filter(status__ne=RECORD.DELETED)
         return vers
 
     @classmethod
@@ -157,6 +174,21 @@ class SchemaVersion(Document):
             return vers[0]
         return None
 
+    @classmethod
+    def get_all_current(self):
+        """
+        return all SchemaVersion records that are currently set as current
+        """
+        return SchemaVersion.objects.filter(status=RECORD.IS_CURRENT)
+
+    @classmethod
+    def next_version_for(self, name):
+        try: 
+            return max(map(lambda v: v.version,
+                           SchemaVersion.objects.filter(name=name))) + 1
+        except ValueError, ex:
+            # none found with this name
+            return 1
         
 
 class Schema(object):
@@ -168,10 +200,12 @@ class Schema(object):
     the schema's namespace and the number of the current version.
 
     This class only supports schemas that are already loaded into 
-    the database.  The class methods can be used for selecting desired schemas.  
+    the database.  That is, one should use the the class methods, e.g. 
+    get_by_name(), to select a desired, existing schema.  It does not 
+    create new Schema instances (use SchemaLoader for that).  
     """
     _ver_props = ("name version location content digest prefixes "+
-                  "includes imports deleted comment").split()
+                  "includes imports status comment").split()
     _comm_props = "namespace current desc"
 
     def __init__(self, schemaVersion):
@@ -193,6 +227,94 @@ class Schema(object):
     def schemaVersion(self):
         return self._wrapped
 
+    @property
+    def deleted(self):
+        return self.status == RECORD.DELETED
+
+    @property
+    def iscurrent(self):
+        return self.status == RECORD.IS_CURRENT
+
+    @property
+    def schemaCommon(self):
+        return self._wrapped.common
+
+    def make_current(self):
+        """
+        make this version the current one.  If this version is marked deleted,
+        a RuntimeError is raised.
+        """
+        if self.current != self.version:
+            if self.deleted:
+                raise RuntimeError("Not allowed to make deleted schema current")
+            self._wrapped.status = RECORD.IS_CURRENT
+            self._wrapped.common.current = self.version
+            self._wrapped.save()
+
+            oldcurr = Schema.get_by_name(self.name)
+            try:
+                self._wrapped.common.save()
+            except:
+                # log inconsistent state
+                raise
+            finally:
+                if oldcurr:
+                    oldcurr._wrapped.status = RECORD.AVAILABLE
+                    oldcurr._wrapped.save()
+
+    def delete(self):
+        """
+        delete this version of the schema
+        """
+        if self.status == RECORD.IS_CURRENT:
+            # make a different version current
+            available = SchemaVersion.objects.filter(name=self.name) \
+                                             .filter(status=RECORD.AVAILABLE) 
+
+            # find the latest undeleted version 
+            maxverno = 0
+            maxver = None
+            for sv in available:
+                if sv.version > maxverno:
+                    maxverno = self.version
+                    maxver = sv
+            if maxver:
+                # log that we're changing the current version
+                Schema(maxver).make_current()
+            else:
+                # log that we're deleting the only current version
+                pass
+
+        self._wrapped.status = RECORD.DELETED
+        self._wrapped.save()
+
+    def undelete(self):
+        """
+        undelete this version of the schema, making it available to be made
+        current.
+        """
+        if self.status == RECORD.DELETED:
+            self._wrapped.status = RECORD.AVAILABLE
+            self._wrapped.save()
+
+    def find_including_schema_names(self):
+        """
+        return the names of the schemas that include this schema, either 
+        directly or indirectly.
+        """
+        includers = []
+        _find_includers(self.name, includers)
+        return includers
+
+    def find_importing_schema_names(self):
+        """
+        return the names of the schemas that include this schema, either 
+        directly or indirectly.
+        """
+        importers = []
+        _find_importers(self.name, importers)
+        return importers
+
     @classmethod
     def find(cls, **kwds):
         """
@@ -208,8 +330,15 @@ class Schema(object):
         """
         versions = SchemaVersion.objects.all()
         for keywd in kwds:
-            if keywd in cls._ver_props:
-                use = { keywd: kwds[keywd] }
+            if keywd in cls._ver_props or keywd in ['deleted', 'current']:
+                if keywd == 'deleted':
+                    op = (not kwds['deleted'] and "__ne") or ""
+                    use = { 'status'+op: RECORD.DELETED }
+                elif keywd == 'current':
+                    op = (not kwds['current'] and "__ne") or ""
+                    use = { 'status'+op: RECORD.IS_CURRENT }
+                else:
+                    use = { keywd: kwds[keywd] }
                 versions = versions.filter(**use)
         ided = []
         for ver in versions:
@@ -252,7 +381,7 @@ class Schema(object):
         out = []
         for sc in scs:
             sv = SchemaVersion.get_by_version(sc.name, sc.current)
-            if not sv or (not allowdeleted and sv.deleted):
+            if not sv or (not allowdeleted and sv.status == RECORD.DELETED):
                 continue
             out.append( Schema(sv) )
 
@@ -285,7 +414,7 @@ class Schema(object):
             vers = vers.filter(version=version) 
 
         if not allowdeleted:
-            vers = vers.filter(deleted=False)
+            vers = vers.filter(status__ne=RECORD.DELETED)
         if len(vers) == 0:
             return None
         return Schema(vers[0])
@@ -297,6 +426,35 @@ class Schema(object):
     @classmethod
     def get_names(self):
         return SchemaCommon.get_names()
+
+def _find_includers(name, found):
+    # add to found the names of schemas that include the named schema
+    # :param name   str:  the unique name of the schema to find includers for
+    # :param found list:  a list of schema names that should be considered to
+    #                      to be already found
+    assert isinstance(found, list)
+
+    svs = SchemaVersion.get_all_current().filter(includes=name)
+    for sv in svs:
+        if sv.name in found:
+            continue
+        found.append(sv.name)
+        _find_includers(sv.name, found)
+
+def _find_importers(name, found):
+    # add to found the names of schemas that include the named schema
+    # :param name   str:  the unique name of the schema to find includers for
+    # :param found list:  a list of schema names that should be considered to
+    #                      to be already found
+    assert isinstance(found, list)
+
+    svs = SchemaVersion.get_all_current().filter(imports=name)
+    for sv in svs:
+        if sv.name in found:
+            continue
+        found.append(sv.name)
+        _find_importers(sv.name, found)
+
     
 class GlobalElementAnnots(Document):
     """
