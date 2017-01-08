@@ -135,7 +135,7 @@ class SchemaVersion(Document):
     name      = fields.StringField(unique_with=['version'], required=True)
     version   = fields.IntField(unique_with=['name'], required=True)
     common    = fields.ReferenceField(SchemaCommon)
-    location  = fields.StringField()
+    location  = fields.StringField(blank=True)
     content   = fields.StringField(blank=False)
     digest    = fields.StringField(blank=False)
     prefixes  = fields.DictField(default={}, blank=True)

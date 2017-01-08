@@ -25,6 +25,39 @@ class TestSchemaLoader(test.TestCase):
         self.assertEqual(len(loader.includes), 0)
         self.assertEqual(len(loader.imports), 0)
 
+    def test_from_stream(self):
+        schemafile = os.path.join(datadir, "experiments.xsd")
+        with open(schemafile) as fd:
+            loader = schema.SchemaLoader.from_stream(fd, "exp",
+                                                     "experiments.xsd")
+        self.assertEquals(loader.name, "exp")
+        self.assertEquals(loader.location, "experiments.xsd")
+        self.assertTrue("<?xml" in loader.content)
+
+        with open(schemafile) as fd:
+            loader = schema.SchemaLoader.from_stream(fd, "exp")
+        self.assertEquals(loader.name, "exp")
+        self.assertIsNone(loader.location)
+        self.assertTrue("<?xml" in loader.content)
+
+    def test_from_file(self):
+        schemafile = os.path.join(datadir, "experiments.xsd")
+        loader = schema.SchemaLoader.from_file(schemafile, "exp",
+                                               "experiments.xsd")
+        self.assertEquals(loader.name, "exp")
+        self.assertEquals(loader.location, "experiments.xsd")
+        self.assertTrue("<?xml" in loader.content)
+        
+        loader = schema.SchemaLoader.from_file(schemafile, "exp")
+        self.assertEquals(loader.name, "exp")
+        self.assertEquals(loader.location, schemafile)
+        self.assertTrue("<?xml" in loader.content)
+        
+        loader = schema.SchemaLoader.from_file(schemafile)
+        self.assertEquals(loader.name, schemafile)
+        self.assertEquals(loader.location, schemafile)
+        self.assertTrue("<?xml" in loader.content)
+
     def test_validate(self):
         loader = create_loader("mylab.xsd")
         self.assertIsNone(loader.tree)
@@ -141,6 +174,33 @@ class TestSchemaLoaderDB(test.TestCase):
         self.assertEquals(schema.namespace, "urn:mylab")
         self.assertEquals(schema.prefixes['m'], "urn:mylab")
         self.assertTrue('xs' in schema.prefixes)
+
+    def test_load_from_stream(self):
+        schemafile = "mylab.xsd"
+        schemapath = os.path.join(datadir, schemafile)
+        with open(schemapath) as fd:
+            schema.SchemaLoader.load_from_stream(fd, schemafile, schemapath)
+
+        sch = models.Schema.get_by_name(schemafile)
+        self.assertIsNotNone(sch)
+        self.assertEquals(sch.name, schemafile)
+        self.assertEquals(sch.location, schemapath)
+        self.assertEquals(sch.namespace, "urn:mylab")
+        self.assertEquals(sch.prefixes['m'], "urn:mylab")
+        self.assertTrue('xs' in sch.prefixes)
+
+    def test_load_from_file(self):
+        schemafile = "mylab.xsd"
+        schemapath = os.path.join(datadir, schemafile)
+        schema.SchemaLoader.load_from_file(schemapath, schemafile)
+
+        sch = models.Schema.get_by_name(schemafile)
+        self.assertIsNotNone(sch)
+        self.assertEquals(sch.name, schemafile)
+        self.assertEquals(sch.location, schemapath)
+        self.assertEquals(sch.namespace, "urn:mylab")
+        self.assertEquals(sch.prefixes['m'], "urn:mylab")
+        self.assertTrue('xs' in sch.prefixes)
 
     def test_load_2(self):
         self.test_load_simple()
@@ -297,7 +357,7 @@ class TestSchemaLoaderDB(test.TestCase):
                                          "{urn:experiments}Equipment") ])
         self.assertTrue("VacuumPump" in lu)
         self.assertEquals(lu["VacuumPump"], ["{urn:experiments}Equipment"])
-        
+
 
 def setUpMongo():
     return connect(host=os.environ['MONGO_TESTDB_URL'])

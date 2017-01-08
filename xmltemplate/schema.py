@@ -82,8 +82,9 @@ class UnresolvedSchemaInclude(SchemaIngestError):
         self.candidate = candidates
 
         msg = "Unable to retrive schema in {0} statement from {1}" \
-              .format( (self.namespace is None and "include") or "import" )
-        super(UnresolvableSchemaInclude, self).__init__(msg)
+              .format( (self.namespace is None and "include") or "import",
+                       self.location )
+        super(UnresolvedSchemaInclude, self).__init__(msg)
 
     def add_possible_match(self, schemaname):
         """
@@ -218,6 +219,69 @@ class SchemaLoader(object):
             self._hash = self._calchash(self.content)
         return self._hash
 
+    @classmethod
+    def from_stream(cls, schemastrm, name, location=None):
+        """
+        create a loader from an open stream.  This does not actually load the 
+        stream; do that with a subsequent call to load() 
+        (or use load_from_stream() instead).
+
+        :param schemastrm file:  the stream containing the schema XML content
+        :param name str:         a unique name to give to the schema
+        :param location str:     a filename or other label indicating source
+                                   of the stream; the default is None, indicating
+                                   the location is unknown or undefined.
+        """
+        content = schemastrm.read()
+        return cls(content, name=name, location=location)
+
+    @classmethod
+    def load_from_stream(cls, schemastrm, name, location=None):
+        """
+        load a schema from an input stream into the database.
+
+        :param schemastrm file:  the stream containing the schema XML content
+        :param name str:         a unique name to give to the schema
+        :param location str:     a filename or other label indicating source
+                                   of the stream; the default is None, indicating
+                                   the location is unknown or undefined.
+        """
+        cls.from_stream(schemastrm, name, location).load()
+
+    @classmethod
+    def from_file(cls, schemafile, name=None, location=None):
+        """
+        create a loader from given file path.  This does not actually load the 
+        schema; do that with a subsequent call to load() 
+        (or use load_from_file() instead).
+
+        :param schemafile str:  the stream containing the schema XML content
+        :param name str:        a unique name to give to the schema; if not 
+                                  given, it will be set to the file name
+        :param location str:     a filename or other label indicating source
+                                   of the stream; if not given, it will be set
+                                   to the given filename.
+        """
+        if not name:
+            name = schemafile
+        if not location:
+            location = schemafile
+        with open(schemafile) as fd:
+            return cls.from_stream(fd, name, location)
+
+    @classmethod
+    def load_from_file(cls, schemafile, name=None, location=None):
+        """
+        load a schema from an input stream into the database.
+
+        :param schemastrm file:  the stream containing the schema XML content
+        :param name str:         a unique name to give to the schema
+        :param location str:     a filename or other label indicating source
+                                   of the stream; the default is None, indicating
+                                   the location is unknown or undefined.
+        """
+        cls.from_file(schemafile, name, location).load()
+
     def prepare(self):
         """
         read the schema, validate it, and read it to prepare for ingestion.
@@ -282,7 +346,8 @@ class SchemaLoader(object):
         sv = SchemaVersion(name=self.name, common=sc, content=self.content, 
                            digest=self.digest, prefixes=self.prefixes, 
                            imports=self.imports, includes=self.includes,
-                           location=self.location)
+                           location=self.location,
+                           version=SchemaVersion.next_version_for(self.name))
         sv.save()
         if sc.current <= 0:
             Schema(sv).make_current()
@@ -521,7 +586,7 @@ class SchemaLoader(object):
         self.global_types = dict(
                    filter(lambda t: len(t[1]) == 0 or t[1][-1] != "__missing__",
                           gltps.iteritems()) )
-        incomplete.extend( map(lambda t,a: IncompleteType(t, a),
+        incomplete.extend( map(lambda t: IncompleteType(t[0], t[1]),
                    filter(lambda t: len(t[1]) > 0 and t[1][-1] == "__missing__",
                           gltps.iteritems())) )
 
