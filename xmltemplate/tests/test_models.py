@@ -315,14 +315,14 @@ class TestSchemaModels(test.TestCase):
         # pdb.set_trace()
         self.load_schema("foofoo", "foo.xsd")
         self.assertEquals(first.find_including_schema_names(), [])
-        first._wrapped.includes = ['foofoo']
+        first._wrapped.includes = ['foo.xsd::foofoo']
         first._wrapped.save()
         self.assertEquals(first.find_including_schema_names(), [])
         second = models.Schema.get_by_name('foofoo')
         self.assertEquals(second.find_including_schema_names(), ['goober'])
         
     def test_simple_find_imports(self):
-        # note: more complex testing of this find_including_schema_names() is
+        # note: more complex testing of this find_importing_schema_names() is
         #   in test_multi.py
         
         name = "goober"
@@ -342,7 +342,7 @@ class TestSchemaModels(test.TestCase):
         # pdb.set_trace()
         self.load_schema("foofoo", "foo.xsd")
         self.assertEquals(first.find_importing_schema_names(), [])
-        first._wrapped.imports = ['foofoo']
+        first._wrapped.imports = ['foo.xsd::foofoo']
         first._wrapped.save()
         self.assertEquals(first.find_importing_schema_names(), [])
         second = models.Schema.get_by_name('foofoo')

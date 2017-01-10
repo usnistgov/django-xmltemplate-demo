@@ -6,6 +6,7 @@ import types, os, hashlib
 from urlparse import urlparse
 from io import BytesIO
 from cStringIO import StringIO
+from collections import OrderedDict as ODict
 
 import requests
 from lxml import etree
@@ -158,6 +159,44 @@ class SchemaValidationError(ValidationError):
     """
     pass
 
+class _SchemaResolver(etree.Resolver):
+    """
+    a schema resolver that can resolve import/include schema references
+    to previously loaded schemas.
+
+    This implementation with a limitation of lxml in that it will only 
+    provide to resolve() the location (system-id) and never namespace 
+    (public-id).  
+    """
+    def __init__(self, includes, imports):
+        self.incls = includes
+        self.imps = imports
+        # self.incls = ODict(map(lambda i: i.split('::'), targetSchema.includes))
+        # self.imps = ODict(map(lambda i: i.split('::'), targetSchema.imports))
+        
+    def resolve(self, location, namespace, context):
+        schema = None
+        if namespace is not None and namespace in self.imps:
+            # This will never happen with lxml!
+            schema = Schema.get_by_name( self.imps[namespace] )
+        
+        elif location:
+            # our schema content will have been modified to insert/change
+            # the location to indicate the schema name to be included/imported.
+            if location.startswith("schemaname:"):
+                schemaname = location[len("schemaname:"):]
+                if not schemaname:
+                    return None
+                schema = Schema.get_by_name( schemaname )
+            else:
+                schema = Schema.get_by_name( self.incls[location] )
+
+        if schema:
+            return self.resolve_string(schema.content, context)
+
+        return None
+            
+
 class SchemaLoader(object):
     """
     a class that prepares a schema for ingestion and executes ingestion.  
@@ -200,12 +239,15 @@ class SchemaLoader(object):
         self.namespace = None
         self.location = location
         self.tree = None
+        self.valid8r = None
         self.prefixes = {}
-        self.includes = []   # values are Schema names
-        self.imports = []    # values are Schema names
+        self.includes = ODict() # keys are locations, values are Schema names
+        self.imports  = ODict() # keys are namespaces, values are Schema names
         self.global_types = {}
         self.global_elems = {}
         self.errors = []
+        self.extern_by_loc = {} # keys are locations, values are Schema names 
+        self.extern_by_ns = {}  # keys are namespaces, values are Schema names
 
         self._calchash = _calc_hash_on_string
         self._hash = None
@@ -282,6 +324,66 @@ class SchemaLoader(object):
         """
         cls.from_file(schemafile, name, location).load()
 
+    def recognize_location(self, location, schemaname):
+        """
+        associate a previously loaded schema document with a location.  
+
+        In the context of a web service, the schemaLocation value is 
+        irrelenvent if it refers to a local file (rather than a URL); thus,
+        the service cannot definitively know which previously loaded schemas
+        (if any) correspond to that location.  This method let's associate
+        previously loaded schemas with locations we may encounter while 
+        loading this schema.  This prevents the loading process from failing
+        when it cannot find a schema invoked via an include or import 
+        statement.
+
+        Note that resolve_includes() will offer possible matches of an 
+        included schema location to previously loaded schema documents.
+        In an interactive context (i.e. a GUI), the user can be given the 
+        chance to pick which one is the one being referenced; calling this 
+        method with the user's choice will resolve the ambiguity.  
+
+        :param location str:  a schema location that might be invoked in an
+                              import or include schema
+        :param name str:      the name of a previously loaded schema
+        """
+        if not Schema.get_by_name(schemaname, allowdeleted=False):
+            raise ValueError("Schema with this name not yet loaded: "+schemaname)
+        self.extern_by_loc[location] = schemaname
+
+    def recognize_namespace(self, namespace, schemaname):
+        """
+        associate namespace with a previously loaded schema document.  
+
+        In the context of a web service, the schemaLocation value is 
+        irrelenvent if it refers to a local file (rather than a URL); thus,
+        if we have loaded several schemas in the same namespace, we cannot 
+        definitively know which one corresponds to the namespace and location
+        that might appear in an import statement in the current schema.  
+        This method let's associate previously loaded schemas with locations 
+        we may encounter while loading this schema.  This prevents the loading 
+        process from failing when it cannot find a schema invoked via an 
+        import statement.
+
+        Note that resolve_imports() will offer possible matches of an 
+        imported schema namespace to previously loaded schema documents.
+        In an interactive context (i.e. a GUI), the user can be given the 
+        chance to pick which one is the one being referenced; calling this 
+        method with the user's choice will resolve the ambiguity.  
+
+        :param namespace str:  a schema location that might be invoked in an
+                               import or include schema
+        :param name      str:  the name of a previously loaded schema
+        """
+        importable = Schema.get_by_name(schemaname, allowdeleted=False)
+        if not importable:
+            raise ValueError("Schema with this name not yet loaded: "+schemaname)
+        if importable.namespace != namespace:
+                raise ValueError("The mismatched namespace for schema named " +
+                                 name + ":\n  " + importable.namespace + " != \n"
+                                 + namespace)
+        self.extern_by_ns[namespace] = schemaname
+
     def prepare(self):
         """
         read the schema, validate it, and read it to prepare for ingestion.
@@ -298,7 +400,7 @@ class SchemaLoader(object):
         self.digest
             
         # parse the schema and make sure it's valid
-        self.validate()
+        self.xml_validate()
 
         # find and check the namespace
         self.check_namespace()
@@ -310,6 +412,9 @@ class SchemaLoader(object):
         self.errors = []
         self.errors.extend( self.resolve_includes() )
         self.errors.extend( self.resolve_imports() )
+
+        # parse the schema and make sure it's valid
+        self.xsd_validate()
 
         # get the names of all global elements and types.  For each type, it 
         # will figure out its ancestors.
@@ -336,6 +441,10 @@ class SchemaLoader(object):
         beprepared()) if anything goes wrong.
         """
         self.beprepared()
+        includes = map(lambda i: "{0}::{1}".format(i[0],i[1]),
+                       self.includes.iteritems())
+        imports  = map(lambda i: "{0}::{1}".format(i[0],i[1]),
+                       self.imports.iteritems())
 
         sc = SchemaCommon.get_by_name(name=self.name, allowdeleted=True) 
         if not sc:
@@ -345,7 +454,7 @@ class SchemaLoader(object):
 
         sv = SchemaVersion(name=self.name, common=sc, content=self.content, 
                            digest=self.digest, prefixes=self.prefixes, 
-                           imports=self.imports, includes=self.includes,
+                           imports=imports, includes=includes,
                            location=self.location,
                            version=SchemaVersion.next_version_for(self.name))
         sv.save()
@@ -353,7 +462,8 @@ class SchemaLoader(object):
             Schema(sv).make_current()
 
         for tp in self.global_types:
-            gta = GlobalTypeAnnots(name=tp, namespace=self.namespace)
+            gta = GlobalTypeAnnots(name=tp, namespace=self.namespace,
+                                   schemaname=sc.name)
             gta.save()
             gt = GlobalType(name=tp, namespace=self.namespace,
                             schemaname=sc.name, version=sv.version,
@@ -362,7 +472,8 @@ class SchemaLoader(object):
             gt.save()
 
         for el in self.global_elems:
-            gea = GlobalElementAnnots(name=el, namespace=self.namespace)
+            gea = GlobalElementAnnots(name=el, namespace=self.namespace,
+                                      schemaname=sc.name)
             gea.save()
             ge = GlobalElement(name=el, namespace=self.namespace,
                                schemaname=sc.name, version=sv.version,
@@ -377,19 +488,49 @@ class SchemaLoader(object):
         """
         errors = []
         try:
-            self.validate()
+            self.xsd_validate()
         except ValidationError, ex:
             errors.extend(ex.errors)
         return errors
 
-    def validate(self):
+    def xml_validate(self):
         """
-        raise a ValidationError if the document is not valid XML Schema.
+        raise a ValidationError if the document is not well-formed XML.
         As a side effect, this will set the tree property to the parsed
         version of the schema.  
         """
         self.tree = _xml_parse(self.content)
-        _compliant_xml_schema(self.tree)
+
+    def xsd_validate(self):
+        """
+        raise a ValidationError if the document is not valid XML Schema.
+        As a side effect, this will set the valid8r property to a validater
+        instance.
+        """
+        if not self.tree:
+            self.xml_validate()
+
+        xp = etree.XMLParser()
+        xp.resolvers.add(_SchemaResolver(self.includes, self.imports))
+        tree = etree.parse(BytesIO(self.content), parser=xp)
+
+        nsm = {"xs": XSD_NS }
+        for imp in tree.getroot().findall("xs:import", nsm): 
+
+            ns = imp.get('namespace')
+            if ns is None or ns not in self.imports:
+                continue
+            schemaname = self.imports[ns]
+            imp.set('schemaLocation', 'schemaname:'+schemaname)
+
+        for incl in tree.getroot().findall("xs:include", nsm):
+            loc = incl.get('schemaLocation')
+            if not loc or loc not in self.includes:
+                continue
+            schemaname = self.includes[loc]
+            incl.set('schemaLocation', 'schemaname:'+schemaname)
+
+        self.valid8r = _compliant_xml_schema(tree)
 
     def _get_super_type(self, el):
         # find the xs:extension or xs:restrictin element and extract the
@@ -476,18 +617,18 @@ class SchemaLoader(object):
                         parent = None
                     
                     elif _name_in(parentln, gllist):
-                        # parent was defined in this document but we have yet
-                        # traced its anscestors
+                        # parent was defined in this document but we are still
+                        # tracing its anscestors
                         _circularly_derived_if(gllist[parentns] in ansc)
                         ansc.append( gllist[parentns] )
                         parent = gllist[parentns]
 
                     else:
                         # we need search through the included & imported schemas:
-                        includes = self.includes + self.imports
+                        includes = self.includes.values() + self.imports.values()
 
                 else:
-                    includes = self.imports
+                    includes = self.imports.values()
 
                 if parent:
                     # still haven't found parent
@@ -540,8 +681,8 @@ class SchemaLoader(object):
         """
         extract the names of all global elements and types.
         """
-        if not self.tree:
-            self.validate()
+        if not self.valid8r:
+            self.xsd_validate()
 
         def _name_in(name, gllist):
             return name in map(lambda g: g[0], gllist)
@@ -622,7 +763,7 @@ class SchemaLoader(object):
         of the targetNamespace.
         """
         if not self.tree:
-            self.validate()
+            self.xml_validate()
             
         root = self.tree.getroot()
         self.namespace = root.get("targetNamespace")
@@ -651,6 +792,16 @@ class SchemaLoader(object):
                 raise SchemaValidationError("include statement is missing "+
                                             "a schemaLocation: "+incl.tostring())
 
+            # See if we've already loaded it
+            if loc in self.includes:
+                continue
+
+            # See if we've been tipped off: try our namespace-schemaname
+            # cheatsheet
+            if loc in self.extern_by_loc:
+                self.includes[loc] = self.extern_by_loc[loc]
+                continue
+                
             # is the location a URL; if so, we can try to load if necessary
             urlloc = urlparse(loc)
             if not urlloc.scheme:
@@ -663,7 +814,7 @@ class SchemaLoader(object):
                       Schema.find(location=loc, namespace="")
             if len(matches) == 1:
                 # we are confident that we have loaded this already
-                self.includes.append(matches[0].name)
+                self.includes[loc] = matches[0].name
 
             elif urlloc:
                 # let's load the schema from it's url 
@@ -706,11 +857,11 @@ class SchemaLoader(object):
         loaded schemas.  Otherwise, attempt to load the schemas from their 
         stated location.   Import namespaces that cannot be resolved are 
         returned as a dict that maps namespaces to stated locations (which will
-        be none if not schemaLocation was provided.
+        be none if no schemaLocation was provided).
         """
         unresolved = []
         if not self.tree:
-            self.validate()
+            self.xml_validate()
         
         # find any include statements
         nsm = {"xs": XSD_NS }
@@ -724,9 +875,27 @@ class SchemaLoader(object):
                 continue
 
             # See if we've already loaded it
+            if ns in self.imports:
+                continue
+
+            # See if we've been tipped off: try our namespace-schemaname
+            # cheatsheet
+            if ns in self.extern_by_ns:
+                self.imports[ns] = self.extern_by_ns[ns]
+                continue
+
+            # See if we've already loaded it: try to match the referenced
+            # schema by namespace and location
             matches = Schema.find(namespace=ns, location=loc, current=True)
+            if len(matches) == 0:
+                if ns:
+                    matches = Schema.find(namespace=ns, current=True)
+                elif loc:
+                    matches = Schema.find(location=loc, current=True)
             if len(matches) == 1:
-                self.imports.append(matches[0].name)
+                if not ns:
+                    ns =  matches[0].namespace
+                self.imports[ns] = matches[0].name
                 continue
 
             # Try to load it.
@@ -742,9 +911,23 @@ class SchemaLoader(object):
                         "Failed to retrieve imported schema ({0}) from {1}: {2}".
                         format(ns, loc, str(ex)))
 
+                imphash = self._calc_hash(impcontent)
+
                 try:
                     impschema = SchemaLoader(impcontent, name=loc, location=loc)
-                    self.imports.append(impschema.load().name)
+                    if not ns:
+                        impschema.prepare()
+                        ns = impschema.namespace
+
+                    # do we recognize the hash?
+                    vers = Schema.find(namespace=ns, digest=impclhash)
+                    if len(vers) > 0:
+                        self.includes[loc] = vers[0].name
+                        continue
+
+                    impschema = impschema.load()
+                    self.imports[impschema.ns] = impschema.name
+
                 except ValidationError, ex:
                     raise ValidationError(
                         "Included schema at {0} has a validation issues: {1}".
@@ -764,7 +947,7 @@ class SchemaLoader(object):
         """
         # parse the schema if necessary
         if not self.tree:
-            self.validate()
+            self.xml_validate()
 
         root = self.tree.getroot()
         self.prefixes.update(root.nsmap)
@@ -797,7 +980,8 @@ def _xml_parse(xmlstr):
 
 def _compliant_xml_schema(parsedxml):
     try:
-        s = etree.XMLSchema(parsedxml)
+        out = etree.XMLSchema(parsedxml)
+        return out
     except etree.XMLSchemaError, ex:
         raise SchemaValidationError("XML Schema compliance error: "+ex.message,
                                     [ex.message])

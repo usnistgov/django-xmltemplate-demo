@@ -58,23 +58,50 @@ class TestSchemaLoader(test.TestCase):
         self.assertEquals(loader.location, schemafile)
         self.assertTrue("<?xml" in loader.content)
 
-    def test_validate(self):
+    def test_xml_validate(self):
         loader = create_loader("mylab.xsd")
         self.assertIsNone(loader.tree)
-        loader.validate()
+        self.assertIsNone(loader.valid8r)
+        loader.xml_validate()
         self.assertIsNotNone(loader.tree)
+        self.assertIsNone(loader.valid8r)
 
         loader = create_loader("badform.xsd")
         self.assertIsNone(loader.tree)
         with self.assertRaises(schema.ValidationError):
-            loader.validate()
+            loader.xml_validate()
         self.assertIsNone(loader.tree)
+        self.assertIsNone(loader.valid8r)
+
+        # bad xsd is not caught in this method
+        loader = create_loader("badxsd.xsd")
+        self.assertIsNone(loader.tree)
+        loader.xml_validate()
+        self.assertIsNotNone(loader.tree)
+        self.assertIsNone(loader.valid8r)
+        
+    def test_xsd_validate(self):
+        loader = create_loader("mylab.xsd")
+        self.assertIsNone(loader.tree)
+        self.assertIsNone(loader.valid8r)
+        loader.xsd_validate()
+        self.assertIsNotNone(loader.tree)
+        self.assertIsNotNone(loader.valid8r)
+
+        loader = create_loader("badform.xsd")
+        self.assertIsNone(loader.tree)
+        self.assertIsNone(loader.valid8r)
+        with self.assertRaises(schema.ValidationError):
+            loader.xsd_validate()
+        self.assertIsNone(loader.tree)
+        self.assertIsNone(loader.valid8r)
 
         loader = create_loader("badxsd.xsd")
         self.assertIsNone(loader.tree)
         with self.assertRaises(schema.SchemaValidationError):
-            loader.validate()
+            loader.xsd_validate()
         self.assertIsNotNone(loader.tree)
+        self.assertIsNone(loader.valid8r)
         
     def test_get_validation_errors(self):
         loader = create_loader("mylab.xsd")
@@ -222,14 +249,16 @@ class TestSchemaLoaderDB(test.TestCase):
         schemafile = "experiments.xsd"
         loader = create_loader(schemafile)
         loader.name = schemafile
+        loader.location = schemafile
 
         loader.load()
 
         schemafile = "microscopy.xsd"
         loader = create_loader(schemafile)
         loader.name = schemafile
+        loader.location = schemafile
 
-        # pdb.set_trace()
+        #pdb.set_trace()
         loader.load()
 
         schema = models.Schema.get_by_name(schemafile)
@@ -243,9 +272,10 @@ class TestSchemaLoaderDB(test.TestCase):
         self.assertEquals(len(schema.includes), 0)
         self.assertEquals(len(schema.imports), 1)
 
-        imported = models.Schema.get_by_name(schema.imports[0])
+        importedname = schema.imports[0].split('::')[1]
+        imported = models.Schema.get_by_name(importedname)
         self.assertIsNotNone(imported)
-        self.assertEquals(imported.name, schema.imports[0])
+        self.assertEquals(imported.name, importedname)
         self.assertEquals(imported.name, "experiments.xsd")
         self.assertEquals(imported.namespace, "urn:experiments")
         
@@ -274,9 +304,9 @@ class TestSchemaLoaderDB(test.TestCase):
         self.assertEquals(len(schema.includes), 1)
         self.assertEquals(len(schema.imports), 0)
 
-        included = models.Schema.get_by_name(schema.includes[0])
+        included = models.Schema.get_by_name(schema.includes[0].split('::')[1])
         self.assertIsNotNone(included)
-        self.assertEquals(included.location, schema.includes[0])
+        self.assertEquals(included.location, schema.includes[0].split('::')[0])
         self.assertEquals(included.namespace, "urn:experiments")
 
     def test_fmt_qname(self):
@@ -299,7 +329,7 @@ class TestSchemaLoaderDB(test.TestCase):
     def test_resolve_qname(self):
         schemafile = "experiments.xsd"
         loader = create_loader(schemafile)
-        loader.validate()
+        loader.xml_validate()
         el = loader.tree.getroot()
         qname = loader._resolve_qname("ex:Goober", el, schema.XSD_NS)
         self.assertEquals(qname, "{urn:experiments}Goober")
@@ -315,7 +345,7 @@ class TestSchemaLoaderDB(test.TestCase):
     def test_get_super_type(self):
         schemafile = "microscopy.xsd"
         loader = create_loader(schemafile)
-        loader.validate()
+        loader.xml_validate()
         # pdb.set_trace()
         cts = loader.tree.findall("//xs:complexType", {"xs": schema.XSD_NS})
         ct = filter(lambda t: t.get("name") == "ElectronMicroscope", cts)

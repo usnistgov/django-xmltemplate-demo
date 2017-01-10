@@ -434,7 +434,7 @@ def _find_includers(name, found):
     #                      to be already found
     assert isinstance(found, list)
 
-    svs = SchemaVersion.get_all_current().filter(includes=name)
+    svs = SchemaVersion.get_all_current().filter(includes__endswith="::"+name)
     for sv in svs:
         if sv.name in found:
             continue
@@ -443,12 +443,12 @@ def _find_includers(name, found):
 
 def _find_importers(name, found):
     # add to found the names of schemas that include the named schema
-    # :param name   str:  the unique name of the schema to find includers for
+    # :param name   str:  the unique name of the schema to find importers for
     # :param found list:  a list of schema names that should be considered to
     #                      to be already found
     assert isinstance(found, list)
 
-    svs = SchemaVersion.get_all_current().filter(imports=name)
+    svs = SchemaVersion.get_all_current().filter(imports__endswith="::"+name)
     for sv in svs:
         if sv.name in found:
             continue
@@ -467,12 +467,15 @@ class GlobalElementAnnots(Document):
     :property name       str: the local name for the element
     :property namespace  str: the namespace URI of the schema within which the 
                               element is defined
+    :property schemaname str: the unique name given to the schema document where 
+                              the element is defined
     :property tag       list: a list of strings representing subject tags
     :property hide   boolean: True if this element should be normally hidden
                               when offering root elements for templates.
     """
-    name      = fields.StringField(unique_with=["namespace"])
+    name      = fields.StringField(unique_with=["namespace", "schemaname"])
     namespace = fields.StringField()
+    schemaname= fields.StringField()
     tag       = fields.ListField(fields.StringField(), default=[], blank=True)
     hide      = fields.BooleanField(default=False)
 
@@ -485,9 +488,9 @@ class GlobalElement(Document):
     :property name       str: the local name for the element
     :property namespace  str: the namespace URI of the schema within which the 
                               element is defined
+    :property version    int: the version of the schema document that this 
     :property schemaname str: the unique name given to the schema document where 
                               the element is defined
-    :property version    int: the version of the schema document that this 
                               element is defined in
     :property schema     ref: a reference to the SchemaVersion record where 
                               this version of the element is defined
@@ -542,13 +545,16 @@ class GlobalTypeAnnots(Document):
     :property name       str: the local name for the element
     :property namespace  str: the namespace URI of the schema within which the 
                               element is defined
+    :property schemaname str: the unique name given to the schema document where 
+                              the type is defined
     :property tag       list: a list of strings representing subject tags
     :property hide   boolean: True if this element should be normally hidden
                               when offering root elements for templates.
     """
-    name = fields.StringField()
+    name      = fields.StringField(unique_with=["namespace", "schemaname"])
     namespace = fields.StringField()
-    tag = fields.ListField(fields.StringField(), default=[], blank=True)
+    schemaname= fields.StringField()
+    tag       = fields.ListField(fields.StringField(), default=[], blank=True)
     hide = fields.BooleanField(default=False)
 
 class GlobalType(Document):
@@ -570,7 +576,8 @@ class GlobalType(Document):
     :property annots     ref: a reference to the GlobalElementAnnots that 
                               contains user annotations.  
     """
-    name      = fields.StringField()
+    name      = fields.StringField(unique_with=["namespace",
+                                                "schemaname", "version"])
     namespace = fields.StringField()
     schemaname= fields.StringField()
     version   = fields.IntField()
