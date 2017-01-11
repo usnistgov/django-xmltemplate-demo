@@ -188,7 +188,7 @@ class _SchemaResolver(etree.Resolver):
                 if not schemaname:
                     return None
                 schema = Schema.get_by_name( schemaname )
-            else:
+            elif location in self.incls:
                 schema = Schema.get_by_name( self.incls[location] )
 
         if schema:
@@ -480,7 +480,7 @@ class SchemaLoader(object):
                                schema=sv, annots=gea)
             ge.save()
                                      
-            
+        return Schema.get_by_name(self.name)
                             
     def get_validation_errors(self):
         """
@@ -512,7 +512,7 @@ class SchemaLoader(object):
 
         xp = etree.XMLParser()
         xp.resolvers.add(_SchemaResolver(self.includes, self.imports))
-        tree = etree.parse(BytesIO(self.content), parser=xp)
+        tree = etree.parse(StringIO(self.content), parser=xp)
 
         nsm = {"xs": XSD_NS }
         for imp in tree.getroot().findall("xs:import", nsm): 
@@ -750,7 +750,7 @@ class SchemaLoader(object):
             return True
         matches = GlobalType.objects.filter(namespace=ns).filter(name=ln)
         matches = filter(lambda t: t.version == t.schema.common.current and
-                                   not t.schema.deleted, matches)
+                                   t.schema.status != RECORD.DELETED, matches)
         return len(matches) > 0
 
     def check_namespace(self):
@@ -826,7 +826,7 @@ class SchemaLoader(object):
                         "Unable to retrieve schema at URL={0}: {1}".
                         format(urlloc, str(ex)))
                                             
-                inclhash = self._calc_hash(inclcontent)
+                inclhash = self._calchash(inclcontent)
 
                 try:
                     # do we recognize the hash?
@@ -901,6 +901,9 @@ class SchemaLoader(object):
             # Try to load it.
             urlloc = urlparse(loc)
             if not urlloc.scheme:
+                # relative URL provided; don't know how to get it
+                # TODO: attempt to combine loc with self.location to form
+                # a full URL for the schema to be imported.
                 matches = map(lambda m: m.name, matches)
                 unresolved.append( UnresolvedSchemaInclude(loc, ns, matches) )
             else:
@@ -911,7 +914,7 @@ class SchemaLoader(object):
                         "Failed to retrieve imported schema ({0}) from {1}: {2}".
                         format(ns, loc, str(ex)))
 
-                imphash = self._calc_hash(impcontent)
+                imphash = self._calchash(impcontent)
 
                 try:
                     impschema = SchemaLoader(impcontent, name=loc, location=loc)
@@ -920,13 +923,13 @@ class SchemaLoader(object):
                         ns = impschema.namespace
 
                     # do we recognize the hash?
-                    vers = Schema.find(namespace=ns, digest=impclhash)
+                    vers = Schema.find(namespace=ns, digest=imphash)
                     if len(vers) > 0:
                         self.includes[loc] = vers[0].name
                         continue
 
                     impschema = impschema.load()
-                    self.imports[impschema.ns] = impschema.name
+                    self.imports[impschema.namespace] = impschema.name
 
                 except ValidationError, ex:
                     raise ValidationError(
@@ -951,10 +954,11 @@ class SchemaLoader(object):
 
         root = self.tree.getroot()
         self.prefixes.update(root.nsmap)
+        if None in self.prefixes:
+            del self.prefixes[None]
         for attrib in root.attrib:
             if attrib.startswith("xmlns:"):
                 self.prefixes[attrib.split(':', 1)[1]] = root.attrib[attrib]
-
 
 
             
@@ -973,7 +977,7 @@ def _retrieve_url_content(url):
 
 def _xml_parse(xmlstr):
     try:
-        return etree.parse(BytesIO(xmlstr))
+        return etree.parse(StringIO(xmlstr))
     except etree.XMLSyntaxError, ex:
         raise ValidationError("XML is not well-formed: "+ex.message,
                               [ex.message])
