@@ -235,3 +235,6 @@ pylint.out
 #radon
 radon.xml
 
+# editors
+*~
+
