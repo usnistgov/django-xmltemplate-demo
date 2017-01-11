@@ -408,5 +408,13 @@ def create_loader(schemafile, name=None):
     return schema.SchemaLoader(content, name=name, location=schemafile)
 
         
+TESTS = "TestSchemaLoader TestSchemaLoaderDB".split()
+
+def test_suite():
+    suite = test.TestSuite()
+    suite.addTests([test.makeSuite(TestSchemaLoader)])
+    suite.addTests([test.makeSuite(TestSchemaLoaderDB)])
+    return suite
+
 if __name__ == '__main__':
     test.main()

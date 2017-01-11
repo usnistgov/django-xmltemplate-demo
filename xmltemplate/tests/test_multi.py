@@ -130,6 +130,12 @@ class TestMultiSchemas(test.TestCase):
         self.assertIn('res-app.xsd', importers)
         self.assertIn('res-md.xsd', importers)
 
+TESTS = ["TestMultiSchemas"]
+
+def test_suite():
+    suite = test.TestSuite()
+    suite.addTests([test.makeSuite(TestMultiSchemas)])
+    return suite
 
 if __name__ == '__main__':
     test.main()

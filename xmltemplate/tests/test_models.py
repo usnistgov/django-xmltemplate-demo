@@ -452,5 +452,14 @@ class TestTemplateModels(test.TestCase):
         found = models.Template.get_by_name("goob")
         self.assertIsNone(found)
 
+
+TESTS = "TestSchemaModels TestTemplateModels".split()
+
+def test_suite():
+    suite = test.TestSuite()
+    suite.addTests([test.makeSuite(TestSchemaModels)])
+    suite.addTests([test.makeSuite(TestTemplateModels)])
+    return suite
+
 if __name__ == '__main__':
     test.main()
