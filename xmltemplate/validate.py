@@ -1,6 +1,6 @@
 """
 a module for handling XML Schema-based validation.  A key purpose of this 
-module is draw the schemas used for validation from the database, including 
+module is to draw the schemas used for validation from the database, including 
 those pulled in via import/include directives.  It also is meant to encapsulate
 the particular validating parser library being used, allowing for multiple 
 implementations to be leveraged.   Currently, the default implementation is 
@@ -10,6 +10,7 @@ import os, sys, abc
 from cStringIO import StringIO
 from abc import abstractmethod, ABCMeta
 from lxml import etree
+from collections import OrderedDict
 
 from .models import Schema
 
@@ -68,7 +69,7 @@ class _SchemaResolver(etree.Resolver):
                 if not content:
                     # should not happen; log a warning?
                     return None
-                return resolve_string(content, context)
+                return self.resolve_string(content, context)
 
             elif location in self.incls:
                 schema = Schema.get_by_name( self.incls[location] )
@@ -117,16 +118,16 @@ class SchemaProvider(object):
         for imp in tree.getroot().findall("xs:import", nsm): 
 
             ns = imp.get('namespace')
-            if ns is None or ns not in self.imports:
+            if ns is None or ns not in self.imps:
                 continue
-            schemaname = self.imports[ns]
+            schemaname = self.imps[ns]
             imp.set('schemaLocation', self.CACHE_SCHEME+schemaname)
 
         for incl in tree.getroot().findall("xs:include", nsm):
             loc = incl.get('schemaLocation')
-            if not loc or loc not in self.includes:
+            if not loc or loc not in self.incls:
                 continue
-            schemaname = self.includes[loc]
+            schemaname = self.incls[loc]
             incl.set('schemaLocation', self.CACHE_SCHEME+schemaname)
 
 
@@ -145,8 +146,8 @@ class SchemaProvider(object):
         # short-circuit the docorting if there is nothing to substitute
         if len(self.incls) == 0 and len(self.imps) == 0:
             return content
-        
-        return etree.tostring(tree)
+
+        return etree.tostring(self.parse_schema(content))
 
     @classmethod
     def from_schema(cls, schema, resolver=None):
@@ -154,12 +155,14 @@ class SchemaProvider(object):
         if not schema:
             raise ValidationError("Schema with name, {0}, not found"
                                   .format(schemaname))
-        includes = self._strmap_to_dict(schema.includes)
-        imports  = self._strmap_to_dict(schema.imports)
+        includes = cls._strmap_to_dict(schema.includes)
+        imports  = cls._strmap_to_dict(schema.imports)
         out = cls(includes, imports)
 
         if resolver:
-            out.extend_resolver(includes, imports)
+            out.extend_resolver(resolver)
+
+        return out
 
     @classmethod
     def _strmap_to_dict(cls, mapfs):
@@ -172,7 +175,7 @@ class SchemaProvider(object):
         schema = Schema.get_by_name(schemaname)
         if not schema:
             return None
-        return cls.from_schema(schema, resolver).transform_schema()
+        return cls.from_schema(schema, resolver).transform_schema(schema.content)
 
 class BaseValidator(object):
     """

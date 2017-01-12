@@ -6,6 +6,7 @@ from mongoengine import connect
 
 from xmltemplate import models
 from xmltemplate import schema
+from xmltemplate import validate as val
 
 datadir = os.path.join(os.path.dirname(__file__), "data")
 
@@ -68,7 +69,7 @@ class TestSchemaLoader(test.TestCase):
 
         loader = create_loader("badform.xsd")
         self.assertIsNone(loader.tree)
-        with self.assertRaises(schema.ValidationError):
+        with self.assertRaises(val.ValidationError):
             loader.xml_validate()
         self.assertIsNone(loader.tree)
         self.assertIsNone(loader.valid8r)
@@ -91,14 +92,14 @@ class TestSchemaLoader(test.TestCase):
         loader = create_loader("badform.xsd")
         self.assertIsNone(loader.tree)
         self.assertIsNone(loader.valid8r)
-        with self.assertRaises(schema.ValidationError):
+        with self.assertRaises(val.ValidationError):
             loader.xsd_validate()
         self.assertIsNone(loader.tree)
         self.assertIsNone(loader.valid8r)
 
         loader = create_loader("badxsd.xsd")
         self.assertIsNone(loader.tree)
-        with self.assertRaises(schema.SchemaValidationError):
+        with self.assertRaises(val.SchemaValidationError):
             loader.xsd_validate()
         self.assertIsNotNone(loader.tree)
         self.assertIsNone(loader.valid8r)
@@ -337,7 +338,7 @@ class TestSchemaLoaderDB(test.TestCase):
         qname = loader._resolve_qname("Goober", el, schema.XSD_NS)
         self.assertEquals(qname, "{http://www.w3.org/2001/XMLSchema}Goober")
 
-        with self.assertRaises(schema.SchemaValidationError):
+        with self.assertRaises(val.SchemaValidationError):
             qname = loader._resolve_qname("mi:Goober", el, schema.XSD_NS)
         
         

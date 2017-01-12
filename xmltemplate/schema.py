@@ -12,8 +12,7 @@ import requests
 from lxml import etree
 
 from .models import *
-
-XSD_NS = "http://www.w3.org/2001/XMLSchema"
+from validate import Validator, XSD_NS, ValidationError, SchemaValidationError
 
 class SchemaIngestError(Exception):
     """
@@ -135,29 +134,6 @@ class IncompleteElement(IncompleteDefinition):
         msg = msg.format(self.elname, self.tpname)
         super(IncompleteElement, self).__init__(msg)
         
-
-class ValidationError(Exception):
-    """
-    An indication that the XML is invalid.
-    """
-    def __init__(self, message, errors=None, docname=None):
-        super(ValidationError, self).__init__(message)
-        self.document = docname
-        if errors is None:
-            errors = []
-        self.errors = errors
-
-    def addError(self, errmsg):
-        """
-        add a validation error to this exception
-        """
-        self.errors.append(errmsg)
-
-class SchemaValidationError(ValidationError):
-    """
-    An indication that the XML Schema is invalid.
-    """
-    pass
 
 class _SchemaResolver(etree.Resolver):
     """
@@ -499,7 +475,7 @@ class SchemaLoader(object):
         As a side effect, this will set the tree property to the parsed
         version of the schema.  
         """
-        self.tree = _xml_parse(self.content)
+        self.tree = Validator.parse(self.content)
 
     def xsd_validate(self):
         """
@@ -510,27 +486,7 @@ class SchemaLoader(object):
         if not self.tree:
             self.xml_validate()
 
-        xp = etree.XMLParser()
-        xp.resolvers.add(_SchemaResolver(self.includes, self.imports))
-        tree = etree.parse(StringIO(self.content), parser=xp)
-
-        nsm = {"xs": XSD_NS }
-        for imp in tree.getroot().findall("xs:import", nsm): 
-
-            ns = imp.get('namespace')
-            if ns is None or ns not in self.imports:
-                continue
-            schemaname = self.imports[ns]
-            imp.set('schemaLocation', 'schemaname:'+schemaname)
-
-        for incl in tree.getroot().findall("xs:include", nsm):
-            loc = incl.get('schemaLocation')
-            if not loc or loc not in self.includes:
-                continue
-            schemaname = self.includes[loc]
-            incl.set('schemaLocation', 'schemaname:'+schemaname)
-
-        self.valid8r = _compliant_xml_schema(tree)
+        self.valid8r = Validator(self.content, self.includes, self.imports)
 
     def _get_super_type(self, el):
         # find the xs:extension or xs:restrictin element and extract the
@@ -581,7 +537,7 @@ class SchemaLoader(object):
         def _first_item_in(name, gllist):
             matches = filter(lambda g: g[0] == name, gllist)
             return ((len(matches) > 0) and matches[0]) or None
-        def _circularly_derived(isso):
+        def _circularly_derived_if(isso):
             if isso:
                 msg = "Circular derivation detected: " + parent + \
                       "derives from itself."
@@ -975,20 +931,6 @@ def _retrieve_url_content(url):
         return r.text
         
 
-def _xml_parse(xmlstr):
-    try:
-        return etree.parse(StringIO(xmlstr))
-    except etree.XMLSyntaxError, ex:
-        raise ValidationError("XML is not well-formed: "+ex.message,
-                              [ex.message])
-
-def _compliant_xml_schema(parsedxml):
-    try:
-        out = etree.XMLSchema(parsedxml)
-        return out
-    except etree.XMLSchemaError, ex:
-        raise SchemaValidationError("XML Schema compliance error: "+ex.message,
-                                    [ex.message])
 
 def _calc_hash_on_string(datastr):
     return hashlib.md5(datastr).hexdigest()

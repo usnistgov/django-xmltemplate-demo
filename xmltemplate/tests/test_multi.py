@@ -107,7 +107,7 @@ class TestMultiSchemas(test.TestCase):
         self.assertEquals(exp.find_importing_schema_names(),
                           ['microscopy.xsd'])
 
-    def test_big_import(self):
+    def test_tri_import(self):
         resmddir = os.path.join(datadir, "resmd")
 
         schemafile = "xml-2001.xsd"
@@ -121,7 +121,7 @@ class TestMultiSchemas(test.TestCase):
 
         schemafile = "res-app.xsd"
         schemapath = os.path.join(resmddir, schemafile)
-        pdb.set_trace()
+        #pdb.set_trace()
         schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
 
         resmd = models.Schema.get_by_name("res-md.xsd")
@@ -141,9 +141,33 @@ class TestMultiSchemas(test.TestCase):
         # automatically loaded from the internet
         schemafile = "res-md.xsd"
         schemapath = os.path.join(resmddir, schemafile)
-        # pdb.set_trace()
+        #pdb.set_trace()
         schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
 
+    def test_full_import(self):
+        resmddir = os.path.join(datadir, "resmd")
+        self.test_tri_import()
+
+        schemafile = "resmd-datacite.xsd"
+        schemapath = os.path.join(resmddir, schemafile)
+        schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
+
+        schemafile = "resmd-access.xsd"
+        schemapath = os.path.join(resmddir, schemafile)
+        schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
+
+        schemafile = "mat-sci_res-md.xsd"
+        schemapath = os.path.join(resmddir, schemafile)
+        schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
+
+        xmlxsd = models.Schema.get_by_name("res-md.xsd")
+        importers = xmlxsd.find_importing_schema_names()
+        self.assertIn('res-app.xsd', importers)
+        self.assertIn('resmd-access.xsd', importers)
+        self.assertIn('resmd-datacite.xsd', importers)
+
+
+        
         
 
 TESTS = ["TestMultiSchemas"]
