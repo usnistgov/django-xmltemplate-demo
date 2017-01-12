@@ -110,6 +110,33 @@ class TestMultiSchemas(test.TestCase):
     def test_big_import(self):
         resmddir = os.path.join(datadir, "resmd")
 
+        schemafile = "xml-2001.xsd"
+        schemapath = os.path.join(resmddir, schemafile)
+        schema.SchemaLoader.load_from_file(schemapath, schemafile,
+                                           "http://www.w3.org/2009/01/xml.xsd")
+
+        schemafile = "res-md.xsd"
+        schemapath = os.path.join(resmddir, schemafile)
+        schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
+
+        schemafile = "res-app.xsd"
+        schemapath = os.path.join(resmddir, schemafile)
+        pdb.set_trace()
+        schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
+
+        resmd = models.Schema.get_by_name("res-md.xsd")
+        self.assertEquals(resmd.find_importing_schema_names(),
+                          ['res-app.xsd'])
+
+        xmlxsd = models.Schema.get_by_name("xml-2001.xsd")
+        importers = xmlxsd.find_importing_schema_names()
+        self.assertIn('res-app.xsd', importers)
+        self.assertIn('res-md.xsd', importers)
+
+    def test_netimport(self):
+        # test loading an imported schema from the internet
+        resmddir = os.path.join(datadir, "resmd")
+
         # res-md.xsd will cause http://www.w3.org/2009/01/xml.xsd to be
         # automatically loaded from the internet
         schemafile = "res-md.xsd"
@@ -117,18 +144,7 @@ class TestMultiSchemas(test.TestCase):
         # pdb.set_trace()
         schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
 
-        schemafile = "res-app.xsd"
-        schemapath = os.path.join(resmddir, schemafile)
-        schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
-
-        resmd = models.Schema.get_by_name("res-md.xsd")
-        self.assertEquals(resmd.find_importing_schema_names(),
-                          ['res-app.xsd'])
-
-        xmlxsd = models.Schema.get_by_name("http://www.w3.org/2009/01/xml.xsd")
-        importers = xmlxsd.find_importing_schema_names()
-        self.assertIn('res-app.xsd', importers)
-        self.assertIn('res-md.xsd', importers)
+        
 
 TESTS = ["TestMultiSchemas"]
 
