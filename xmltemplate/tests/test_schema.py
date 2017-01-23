@@ -377,6 +377,25 @@ class TestSchemaLoaderDB(test.TestCase):
             loader._global_type_defined("{urn:experiements.xsd}Equipment"))
         self.assertFalse(
             loader._global_type_defined("{urn:experiements.xsd}Goober"))
+
+        
+    def test_global_def_loading(self):
+        loader = create_loader("experiments.xsd")
+        loader.load()
+
+        els = models.GlobalElement.get_all_elements()
+        self.assertEquals(len(els), 1)
+        self.assertIn("urn:experiments", els)
+        self.assertEquals(els["urn:experiments"][0].name, "Lab")
+
+        typs = models.GlobalType.get_all_types()
+        self.assertEquals(len(typs), 1)
+        self.assertIn("urn:experiments", typs)
+        self.assertEquals(len(typs['urn:experiments']), 2)
+        self.assertIn("LabSetup", [t.name for t in typs["urn:experiments"]])
+        self.assertIn("Equipment", [t.name for t in typs["urn:experiments"]])
+        self.assertFalse(typs["urn:experiments"][0].abstract)
+        self.assertFalse(typs["urn:experiments"][1].abstract)
         
 
     def test_trace_anscestors(self):
@@ -389,6 +408,62 @@ class TestSchemaLoaderDB(test.TestCase):
         self.assertTrue("VacuumPump" in lu)
         self.assertEquals(lu["VacuumPump"], ["{urn:experiments}Equipment"])
 
+    def test_abstract(self):
+        loader = create_loader("absexp.xsd")
+        loader.load()
+
+        tp = models.GlobalType.objects.get(name='LabSetup')
+        self.assertEquals(tp.name, 'LabSetup')
+        self.assertFalse(tp.abstract)
+        tp = models.GlobalType.objects.get(name='Equipment')
+        self.assertTrue(tp.abstract)
+        tp = models.GlobalType.objects.get(name='ElectronMicroscope')
+        self.assertFalse(tp.abstract)
+        
+        tps = models.GlobalType.get_all_types(True)
+        self.assertEquals(len(tps['urn:experiments']), 3)
+        self.assertIn("LabSetup", [t.name for t in tps["urn:experiments"]])
+        self.assertIn("Equipment", [t.name for t in tps["urn:experiments"]])
+        self.assertIn("ElectronMicroscope",
+                      [t.name for t in tps["urn:experiments"]])
+
+        tps = models.GlobalType.get_all_types()
+        self.assertEquals(len(tps['urn:experiments']), 2)
+        self.assertIn("LabSetup", [t.name for t in tps["urn:experiments"]])
+        self.assertNotIn("Equipment", [t.name for t in tps["urn:experiments"]])
+        self.assertIn("ElectronMicroscope",
+                      [t.name for t in tps["urn:experiments"]])
+
+    def test_global_qname(self):
+        loader = create_loader("experiments.xsd")
+        loader.load()
+
+        tp = models.GlobalType.objects.get(name='Equipment') 
+        self.assertEquals(tp.qname, "{urn:experiments}Equipment")
+        el = models.GlobalElement.objects.get(name='Lab') 
+        self.assertEquals(el.qname, "{urn:experiments}Lab")
+        
+    def test_list_subtypes(self):
+        loader = create_loader("absexp.xsd")
+        loader.load()
+
+        tp = models.GlobalType.objects.get(name='Equipment') 
+        self.assertEquals(tp.qname, "{urn:experiments}Equipment")
+        subtps = tp.list_subtypes()
+        self.assertEquals(len(subtps), 1)
+        self.assertEquals(subtps[0], "{urn:experiments}ElectronMicroscope")
+        
+    def test_list_subtypes2(self):
+        loader = create_loader("experiments.xsd")
+        loader.load()
+        loader = create_loader("microscopy.xsd")
+        loader.load()
+
+        tp = models.GlobalType.objects.get(name='Equipment') 
+        self.assertEquals(tp.qname, "{urn:experiments}Equipment")
+        subtps = tp.list_subtypes()
+        self.assertEquals(len(subtps), 1)
+        self.assertEquals(subtps[0], "{urn:microscopy}ElectronMicroscope")
 
 def setUpMongo():
     return connect(host=os.environ['MONGO_TESTDB_URL'])

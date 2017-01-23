@@ -67,7 +67,7 @@ class _SchemaResolver(etree.Resolver):
             if location.startswith(SchemaProvider.CACHE_SCHEME):
                 content = SchemaProvider.get(location, self)
                 if not content:
-                    # should not happen; log a warning?
+                    # should not happen; LOG a warning?
                     return None
                 return self.resolve_string(content, context)
 

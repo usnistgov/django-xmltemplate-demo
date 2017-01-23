@@ -10,6 +10,8 @@ RUN mkdir -p /tmp/mongodb/logs
 COPY testentry.sh $INITBIN
 RUN chmod a+x $INITBIN/testentry.sh
 
+EXPOSE 8000
+
 ENTRYPOINT ["/usr/local/sbin/testentry.sh"]
 CMD ["null", "bash"]
 

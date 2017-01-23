@@ -175,6 +175,18 @@ class SchemaVersion(Document):
         return None
 
     @classmethod
+    def get_by_digest(cls, digest, name=None):
+        """
+        Return the SchemaVersion instance that matches a given digest.  Note
+        that the returned instance may be marked as deleted.
+        """
+        svs = cls.objects.filter(digest=digest)
+        if name:
+            svs = svs.filter(name=name)
+        return (len(svs) > 0 and svs[0]) or None
+            
+
+    @classmethod
     def get_all_current(self):
         """
         return all SchemaVersion records that are currently set as current
@@ -244,7 +256,7 @@ class Schema(object):
         make this version the current one.  If this version is marked deleted,
         a RuntimeError is raised.
         """
-        if self.current != self.version:
+        if not self.iscurrent:
             if self.deleted:
                 raise RuntimeError("Not allowed to make deleted schema current")
             self._wrapped.status = RECORD.IS_CURRENT
@@ -255,7 +267,7 @@ class Schema(object):
             try:
                 self._wrapped.common.save()
             except:
-                # log inconsistent state
+                # LOG inconsistent state
                 raise
             finally:
                 if oldcurr:
@@ -266,7 +278,7 @@ class Schema(object):
         """
         delete this version of the schema
         """
-        if self.status == RECORD.IS_CURRENT:
+        if self.iscurrent:
             # make a different version current
             available = SchemaVersion.objects.filter(name=self.name) \
                                              .filter(status=RECORD.AVAILABLE) 
@@ -279,11 +291,12 @@ class Schema(object):
                     maxverno = self.version
                     maxver = sv
             if maxver:
-                # log that we're changing the current version
+                # LOG that we're changing the current version
                 Schema(maxver).make_current()
             else:
-                # log that we're deleting the only current version
-                pass
+                # LOG that we're deleting the only current version
+                self._wrapped.common.current = 0
+                self._wrapped.common.save()
 
         self._wrapped.status = RECORD.DELETED
         self._wrapped.save()
@@ -386,6 +399,14 @@ class Schema(object):
             out.append( Schema(sv) )
 
         return out
+
+    @classmethod
+    def get_all_current(cls):
+        """
+        return a list of all Schemas marked as current
+        """
+        vers = SchemaVersion.get_all_current()
+        return [Schema(ver) for ver in vers]
                 
     @classmethod
     def get_by_name(cls, name, version=None, allowdeleted=False):
@@ -505,6 +526,13 @@ class GlobalElement(Document):
     schema    = fields.ReferenceField(SchemaVersion)
     annots    = fields.ReferenceField(GlobalElementAnnots)
 
+    @property
+    def qname(self):
+        """
+        the type's qualified name of the form "{NS}LOCAL-NAME"
+        """
+        return "{{{0}}}{1}".format(self.namespace, self.name)
+
     @classmethod
     def get_all_elements(cls):
         """
@@ -530,9 +558,9 @@ class GlobalElement(Document):
                     continue
                 if el.namespace not in elsbyns:
                     elsbyns[el.namespace] = []
-                elsbyns.append(el)
+                elsbyns[el.namespace].append(el)
 
-        return elsbysnd
+        return elsbyns
 
 class GlobalTypeAnnots(Document):
     """
@@ -570,6 +598,7 @@ class GlobalType(Document):
                               type is defined in
     :property schema     ref: a reference to the SchemaVersion record where 
                               this version of the type is defined
+    :property abstract  bool: true if this type is declared abstract
     :property anscestors list:  an ordered list of the anscestor types of this
                               type.  The first type is the immediate super-type.
                               Each type name is in "{NS}NAME" format.
@@ -582,11 +611,19 @@ class GlobalType(Document):
     schemaname= fields.StringField()
     version   = fields.IntField()
     schema    = fields.ReferenceField(SchemaVersion)
+    abstract  = fields.BooleanField(blank=False, default=False)
     anscestors= fields.ListField(fields.StringField(), default=[], blank=True)
     annots    = fields.ReferenceField(GlobalTypeAnnots)
 
+    @property
+    def qname(self):
+        """
+        the type's qualified name of the form "{NS}LOCAL-NAME"
+        """
+        return "{{{0}}}{1}".format(self.namespace, self.name)
+
     @classmethod
-    def get_all_types(cls):
+    def get_all_types(cls, include_abstract=False):
         """
         return all of the global types from all the representative 
         namespaces that aren't marked as hidden.  
@@ -604,16 +641,31 @@ class GlobalType(Document):
         tpsbyns = {}
         for name in currents:
             gltps = GlobalType.objects.filter(schemaname=name)        \
-                                      .filter(version=currents[name]) 
-            for tp in glels:
+                                      .filter(version=currents[name])
+            if not include_abstract:
+                gltps = gltps.filter(abstract=False)
+            for tp in gltps:
                 if tp.annots.hide:
                     continue
                 if tp.namespace not in tpsbyns:
                     tpsbyns[tp.namespace] = []
-                elsbyns.append(tp)
+                tpsbyns[tp.namespace].append(tp)
 
-        return elsbysnd
+        return tpsbyns
 
+    def list_subtypes(self, include_abstract=False):
+        """
+        return a list of global types that are all subtypes of this
+        global type.
+
+        :param include_abstract bool:  if False (default), do not include any 
+                                         abstract types
+        :return list:  the subtype names, each of the form, "{NS}LOCAL-NAME"
+        """
+        subtps = GlobalType.objects.filter(anscestors=self.qname)
+        if not include_abstract:
+            subtps = subtps.filter(abstract=False)
+        return ["{{{0}}}{1}".format(t.namespace, t.name) for t in subtps]
 
 
 class TypeRenderSpec(Document):
@@ -659,7 +711,7 @@ class TemplateCommon(Document):
     :property current int:    the version number of the schema that should be
                                  considered the current one.
     :property root str:       a namespace-qualified element name (in the form
-                                 "{NAMESPACE}ELNAME") for the root element of
+                                 "SCHEMANAME:ELNAME") for the root element of
                                  conforming instance documents.
     :property desc str:       a brief (displayable) description of the template.
     """
@@ -711,6 +763,9 @@ class TemplateVersion(Document):
     :property spec  ref:      the TypeRenderSpec object to use to render the 
                               root element; if not set, this will be generated 
                               dynamically.
+    :property tranforms ref:  a reference to a record in Transforms that 
+                              identifies the XSL stylesheets
+    :property deleted bool:   True if this version is currently deleted
     :property comment str:    A brief (displayable) comment noting what is 
                               different about this version.
     """
@@ -721,6 +776,7 @@ class TemplateVersion(Document):
     extschemas = fields.ListField(SchemaVersion, blank=True, default=[])
     label   = fields.StringField()
     spec    = fields.ReferenceField(TypeRenderSpec, blank=True)
+    # transforms = fields.ReferenceField(Transforms, blank=True)
     deleted = fields.BooleanField(blank=False, default=False)
     comment = fields.StringField(default="")
 

@@ -160,14 +160,45 @@ class TestMultiSchemas(test.TestCase):
         schemapath = os.path.join(resmddir, schemafile)
         schema.SchemaLoader.load_from_file(schemapath, schemafile, schemafile)
 
+        # find importers
         xmlxsd = models.Schema.get_by_name("res-md.xsd")
         importers = xmlxsd.find_importing_schema_names()
         self.assertIn('res-app.xsd', importers)
         self.assertIn('resmd-access.xsd', importers)
         self.assertIn('resmd-datacite.xsd', importers)
 
+        # check subtypes
+        resmd_ns = "http://schema.nist.gov/xml/res-md/1.0wd"
+        acces_ns = "http://schema.nist.gov/xml/resmd-access/1.0wd"
+        access_q = "{http://schema.nist.gov/xml/resmd-access/1.0wd}"
+        res = models.GlobalType.objects.filter(namespace=resmd_ns)\
+                                       .get(name='Resource')
+        subtps = res.list_subtypes(False)
+        self.assertEquals(len(subtps), 1)
+        self.assertEquals(subtps[0], access_q+"AccessibleResource")
 
+        role = models.GlobalType.objects.filter(namespace=resmd_ns)\
+                                        .get(name='Role')
+        subtps = role.list_subtypes(False)
+        self.assertEquals(len(subtps), 2)
+        self.assertIn(access_q+"Software", subtps)
+        self.assertIn(access_q+"ServiceAPI", subtps)
+
+        role = models.GlobalType.objects.filter(namespace=resmd_ns)\
+                                        .get(name='Role')
+        subtps = role.list_subtypes(True)
+        self.assertEquals(len(subtps), 4)
+        self.assertIn(access_q+"SoftwareRoleTypeRestriction", subtps)
+        self.assertIn(access_q+"Software", subtps)
+        self.assertIn(access_q+"ServiceAPIRoleTypeRestriction", subtps)
+        self.assertIn(access_q+"ServiceAPI", subtps)
         
+
+
+# TODO:  check loading of types, tracking of ancestors
+#        review when types are incomplete; handle ambiguities
+#        support finding all subtypes (abstract?)
+#        test templates
         
 
 TESTS = ["TestMultiSchemas"]

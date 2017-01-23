@@ -71,9 +71,11 @@ class UnresolvedSchemaInclude(SchemaIngestError):
         this error refers to an import statement.
 
         :param location  str:   the stated location for the required schema
-        :parem namespace str:   the required schema's namespace.  Only set 
+        :param namespace str:   the required schema's namespace.  Only set 
                                   this if this error originates from an 
                                   import statement.
+        :param candidates list: a list of possible matches to the schemas already
+                                  in the system for the unresolved one.
         """
         self.location  = location
         self.namespace = namespace
@@ -214,13 +216,16 @@ class SchemaLoader(object):
         self.name = name
         self.namespace = None
         self.location = location
+        self.description = None
+        self.comment = None
         self.tree = None
         self.valid8r = None
         self.prefixes = {}
         self.includes = ODict() # keys are locations, values are Schema names
         self.imports  = ODict() # keys are namespaces, values are Schema names
-        self.global_types = {}
         self.global_elems = {}
+        self.global_types = {}
+        self.abstypes = []
         self.errors = []
         self.extern_by_loc = {} # keys are locations, values are Schema names 
         self.extern_by_ns = {}  # keys are namespaces, values are Schema names
@@ -363,6 +368,15 @@ class SchemaLoader(object):
     def prepare(self):
         """
         read the schema, validate it, and read it to prepare for ingestion.
+        This validates and extracts a bunch of information from the schemas.
+
+        Some of the errors that can occur can stem from the fact that the 
+        loader can't access other schema documents given in import/include
+        directives.  This may be because those documents have not been uploaded 
+        yet (and are not accessible via the web) or because we can't figure out
+        which of the previously loaded schemas is the one we need.  This 
+        implementation tries to gather all such errors so that the system can 
+        offer suggestions for addressing them.
 
         :return bool:  true if the schema is ready for loading; false if some
                        fixable errors occurred
@@ -375,7 +389,8 @@ class SchemaLoader(object):
         # trigger the digest calculation
         self.digest
             
-        # parse the schema and make sure it's valid
+        # parse the schema and make sure it's well-formed XML; there's no 
+        # point in going further if it's not
         self.xml_validate()
 
         # find and check the namespace
@@ -390,11 +405,19 @@ class SchemaLoader(object):
         self.errors.extend( self.resolve_imports() )
 
         # parse the schema and make sure it's valid
-        self.xsd_validate()
+        try:
+            self.xsd_validate()
+        except ValidationError, ex:
+            if len(self.errors) == 0:
+                # validation error apparently unrelated to missing includes
+                raise
+            # LOG a problem
+            self.errors.append(ex)
 
         # get the names of all global elements and types.  For each type, it 
         # will figure out its ancestors.
         self.errors.extend( self.get_global_defs() )
+        return len(self.errors) == 0
 
     def beprepared(self):
         """
@@ -425,38 +448,52 @@ class SchemaLoader(object):
         sc = SchemaCommon.get_by_name(name=self.name, allowdeleted=True) 
         if not sc:
             sc = SchemaCommon(namespace=self.namespace, name=self.name,
-                              current=0)
+                              current=0, desc=self.description)
             sc.save()
+            if self.comment is None:
+                self.comment = "initial version"
 
         sv = SchemaVersion(name=self.name, common=sc, content=self.content, 
                            digest=self.digest, prefixes=self.prefixes, 
                            imports=imports, includes=includes,
-                           location=self.location,
+                           location=self.location, comment=self.comment,
                            version=SchemaVersion.next_version_for(self.name))
         sv.save()
         if sc.current <= 0:
             Schema(sv).make_current()
 
         for tp in self.global_types:
-            gta = GlobalTypeAnnots(name=tp, namespace=self.namespace,
-                                   schemaname=sc.name)
-            gta.save()
+            gta = GlobalTypeAnnots.objects.filter(name=tp,
+                                                  namespace=self.namespace,
+                                                  schemaname=sc.name)
+            gta = (len(gta) > 0 and gta[0]) or None
+            if not gta:
+                gta = GlobalTypeAnnots(name=tp, namespace=self.namespace,
+                                       schemaname=sc.name)
+                gta.save()
+
             gt = GlobalType(name=tp, namespace=self.namespace,
                             schemaname=sc.name, version=sv.version,
                             schema=sv, anscestors=self.global_types[tp],
-                            annots=gta)
+                            annots=gta, abstract=(tp in self.abstypes))
             gt.save()
 
         for el in self.global_elems:
-            gea = GlobalElementAnnots(name=el, namespace=self.namespace,
-                                      schemaname=sc.name)
-            gea.save()
+            gea = GlobalElementAnnots.objects.filter(name=el,
+                                                     namespace=self.namespace,
+                                                     schemaname=sc.name)
+            gea = (len(gea) > 0 and gea[0]) or None
+            if not gea:
+                gea = GlobalElementAnnots(name=el, namespace=self.namespace,
+                                          schemaname=sc.name)
+                gea.save()
+
             ge = GlobalElement(name=el, namespace=self.namespace,
                                schemaname=sc.name, version=sv.version,
                                schema=sv, annots=gea)
             ge.save()
                                      
-        return Schema.get_by_name(self.name)
+        return Schema.get_by_name(self.name, sv.version)
                             
     def get_validation_errors(self):
         """
@@ -649,6 +686,7 @@ class SchemaLoader(object):
         gltps = []
         glels = []
         incomplete = []
+        self.abstypes = []
 
         # first collect the global element and type names, extracting typing
         # info
@@ -671,12 +709,17 @@ class SchemaLoader(object):
                         line = " at line "+str(el.sourceline)
                     raise SchemaValidationError("Empty or missing name for "+
                                                 "global type definition"+line)
-                
+
+                abstract = el.get('abstract', 'false')
+                abstract = abstract == 'true'
+                 
                 parent = self._get_super_type(el) 
                 if parent == self._resolve_qname(name, el, self.namespace):
                     raise SchemaValidationError("Global type '"+name+"' derives"+
                                                 " from itself!")
                 gltps.append( (name, parent) )
+                if abstract:
+                    self.abstypes.append(name)
 
         # build the type ancestry lines
         gltps = self._trace_anscestors( gltps )
@@ -771,39 +814,45 @@ class SchemaLoader(object):
             if len(matches) == 1:
                 # we are confident that we have loaded this already
                 self.includes[loc] = matches[0].name
+                continue
 
             elif urlloc:
-                # let's load the schema from it's url 
+                # let's load the schema from it's url
+                inclhash = None
                 try:
                     # pull the content and check its hash
                     inclcontent = _retrieve_url_content(loc)
+                    inclhash = self._calchash(inclcontent)
                 except Exception, ex:
-                    raise SchemaIngestError(
-                        "Unable to retrieve schema at URL={0}: {1}".
-                        format(urlloc, str(ex)))
-                                            
-                inclhash = self._calchash(inclcontent)
+                    unresolved.append(
+                        SchemaIngestError(
+                            "Unable to retrieve schema at URL={0}: {1}".
+                            format(urlloc, str(ex)))
+                    )
 
-                try:
-                    # do we recognize the hash?
-                    vers = Schema.find(namespace=self.namespace, digest=inclhash)
-                    if len(vers) > 0:
-                        self.includes.append(vers[0].name)
-                    else:
-                        # no, so load it
-                        inclschema = SchemaLoader(inclcontent, urlloc,
-                                                  location=urlloc)
-                        self.includes.append(inclschema.load().name)
-                except ValidationError, ex:
-                    raise SchemaIngestError(
-                        "Included schema at {0} has a validation issues: {1}".
-                        format(urlloc, str(ex.errors)))
+                if inclhash:
+                    try:
+                        # do we recognize the hash?
+                        vers = Schema.find(namespace=self.namespace,
+                                           digest=inclhash)
+                        if len(vers) > 0:
+                            self.includes.append(vers[0].name)
+                        else:
+                            # no, so load it
+                            inclschema = SchemaLoader(inclcontent, urlloc,
+                                                      location=urlloc)
+                            self.includes.append(inclschema.load().name)
+                            continue
+                        
+                    except ValidationError, ex:
+                        raise SchemaIngestError(
+                           "Included schema at {0} has a validation issues: {1}".
+                           format(urlloc, str(ex.errors)))
                     
-            else:
-                # we only have guesses:
-                matches = map(lambda s: s.name, matches)
-                error = UnresolvedSchemaInclude(loc, candidates=matches)
-                unresolved.append( error )
+            # we are left only with guesses:
+            matches = map(lambda s: s.name, matches)
+            error = UnresolvedSchemaInclude(loc, candidates=matches)
+            unresolved.append( error )
 
         return unresolved
 
@@ -862,37 +911,45 @@ class SchemaLoader(object):
                 # a full URL for the schema to be imported.
                 matches = map(lambda m: m.name, matches)
                 unresolved.append( UnresolvedSchemaInclude(loc, ns, matches) )
+                continue
+            
             else:
+                imphash = None
                 try:
                     impcontent = _retrieve_url_content(loc)
+                    imphash = self._calchash(impcontent)
                 except Exception, ex:
-                    raise SchemaIngestError(
-                        "Failed to retrieve imported schema ({0}) from {1}: {2}".
-                        format(ns, loc, str(ex)))
+                    unresolved.append(
+                        SchemaIngestError(
+                            "Failed to retrieve imported schema ({0}) from {1}: {2}".
+                            format(ns, loc, str(ex))
+                        )
+                    )
+                    continue
 
-                imphash = self._calchash(impcontent)
+                if imphash:
+                    try:
+                        impschema = SchemaLoader(impcontent, name=loc,
+                                                 location=loc)
+                        if not ns:
+                            impschema.prepare()
+                            ns = impschema.namespace
 
-                try:
-                    impschema = SchemaLoader(impcontent, name=loc, location=loc)
-                    if not ns:
-                        impschema.prepare()
-                        ns = impschema.namespace
+                        # do we recognize the hash?
+                        vers = Schema.find(namespace=ns, digest=imphash)
+                        if len(vers) > 0:
+                            self.imports[ns] = vers[0].namespace
+                            continue
 
-                    # do we recognize the hash?
-                    vers = Schema.find(namespace=ns, digest=imphash)
-                    if len(vers) > 0:
-                        self.includes[loc] = vers[0].name
-                        continue
+                        impschema = impschema.load()
+                        self.imports[impschema.namespace] = impschema.name
 
-                    impschema = impschema.load()
-                    self.imports[impschema.namespace] = impschema.name
-
-                except ValidationError, ex:
-                    raise ValidationError(
-                        "Included schema at {0} has a validation issues: {1}".
-                        format(urlloc, str(ex.errors)))
-                except FixableErrorsRemain, ex:
-                    unresolved.extend( ex.errors )
+                    except ValidationError, ex:
+                        raise ValidationError(
+                            "Included schema at {0} has a validation issues: {1}".
+                            format(urlloc, str(ex.errors)))
+                    except FixableErrorsRemain, ex:
+                        unresolved.extend( ex.errors )
 
         return unresolved
 
