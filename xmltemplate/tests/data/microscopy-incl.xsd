@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema targetNamespace="urn:experiments"
+           xmlns:ex="urn:experiments"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+  <xs:include schemaLocation="experiments.xsd"/>
+
+  <xs:complexType name="ElectronMicroscope">
+    <xs:complexContent>
+      <xs:extension base="ex:Equipment">
+        <xs:sequence>
+          <xs:element name="magnification" type="xs:decimal"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  
+</xs:schema>

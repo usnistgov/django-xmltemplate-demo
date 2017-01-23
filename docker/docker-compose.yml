@@ -1,0 +1,21 @@
+version: "2"
+services: 
+    pymongodev:
+        build: pymongodev
+        command: ["bash"]
+    mdcsready:
+        build: mdcsready
+        command: ["null"]
+        depends_on: [ pymongodev ]
+    mdcsdev:
+        build: mdcsdev
+        command: ["null"]
+        depends_on: [ mdcsready ]
+    test:
+        build: test
+        command: ["null"]
+        depends_on: [ mdcsdev ]
+        volumes:
+          - ..:/mdcs
+
+        

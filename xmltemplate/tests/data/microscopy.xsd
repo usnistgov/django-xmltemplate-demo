@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema targetNamespace="urn:microscopy"
+           xmlns:mi="urn:microscopy"
+           xmlns:ex="urn:experiments"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+  <xs:import namespace="urn:experiments"
+             schemaLocation="experiments.xsd"/>
+<!--
+  <xs:import namespace="urn:experiments"
+             schemaLocation="file:///mdcs/experiments.xsd"/>
+  <xs:import namespace="urn:experiments"/>
+  -->
+
+<!--
+  <xs:element name="MicroLab" type="ex:LabSetup"/>
+  -->
+  
+
+  <xs:complexType name="ElectronMicroscope">
+    <xs:complexContent>
+      <xs:extension base="ex:Equipment">
+        <xs:sequence>
+          <xs:element name="magnification" type="xs:decimal"/>
+        </xs:sequence>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+
+  
+</xs:schema>

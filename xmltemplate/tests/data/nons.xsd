@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="MyLab" type="LabSetup"/>
+
+  <xs:complexType name="LabSetup">
+    <xs:sequence>
+      <xs:element name="title" type="xs:string"/>
+      <xs:element name="type" type="xs:token"/>
+    </xs:sequence>
+  </xs:complexType>    
+</xs:schema>
