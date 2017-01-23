@@ -1,4 +1,4 @@
-FROM rayplante/mdcsdev
+FROM mdcs_mdcsdev
 MAINTAINER Ray Plante <raymond.plante@nist.gov>
 
 ENV PYTHONPATH /mdcs

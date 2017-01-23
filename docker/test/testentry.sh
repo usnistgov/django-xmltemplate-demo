@@ -18,12 +18,13 @@ case "$1" in
         start
         ;;
     testall)
-        start && xmltemplate/tests/runalltests.py
+#        start && xmltemplate/tests/runalltests.py
+        start && python xmltemplate/manage.py test xmltemplate
         ;;
     null)
         ;;
     *)
-        echo Usage:  `basename $0` startdb\|null
+        echo Usage:  `basename $0` startdb\|testall\|null
         exit 1
         ;;
 esac

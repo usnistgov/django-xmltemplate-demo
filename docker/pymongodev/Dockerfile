@@ -6,3 +6,4 @@ COPY mongod.conf /etc/mongod.conf
 RUN apt-get update && apt-get install -y python python-pip python-dev
 RUN pip install pymongo
 
+CMD ["bash"]

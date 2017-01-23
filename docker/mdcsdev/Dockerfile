@@ -1,4 +1,4 @@
-FROM rayplante/mdcsready
+FROM mdcs_mdcsready
 MAINTAINER Ray Plante <raymond.plante@nist.gov>
 
 ENV INITBIN /usr/local/sbin

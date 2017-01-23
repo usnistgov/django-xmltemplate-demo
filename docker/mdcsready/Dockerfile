@@ -1,4 +1,4 @@
-FROM rayplante/pymongodev
+FROM mdcs_pymongodev
 MAINTAINER Ray Plante <raymond.plante@nist.gov>
 
 RUN apt-get install -y net-tools redis-server libxml2-dev libxslt1-dev \
