@@ -1,8 +1,9 @@
 # xmltemplate module
 
+This is a prototype module demonstrating a proposed model for XML
+Templates in MDCS. 
+
 ## Using docker to run xmltemplate tests
 
-```
-docker run -ti --rm --dns DNS_IP -v $PWD:/mdcs \
-       rayplante/mdcsdev null bash
-```
+See [docker/README.md](docker/README.md) for instructions.
+
