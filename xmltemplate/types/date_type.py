@@ -2,14 +2,14 @@
 """
 from abc import ABCMeta, abstractmethod
 
-from xmltemplate.rendmod import Rendmod
+from xmltemplate.module import AbstractModule
 
 
-class TextRendmod(Rendmod, metaclass=ABCMeta):
+class DateModule(AbstractModule, metaclass=ABCMeta):
     """Popup module
     """
 
-    def __init__(self, scripts=list(), styles=list(), button_label='', config = None):
+    def __init__(self, scripts=list(), styles=list(), config = None):
         """ Initialize module
 
         Args:
@@ -17,10 +17,10 @@ class TextRendmod(Rendmod, metaclass=ABCMeta):
             styles:
         """
         scripts = ['xmltemplate/js/builtin/text_type.js'] + scripts
-        Rendmod.__init__(self, scripts=scripts, styles=styles)
+        AbstractModule.__init__(self, scripts=scripts, styles=styles)
         self.config = config
 
-    def _render_type(self, request, config):
+    def _render_type(self, request, config, module):
         """ Return type's rendering
 
         Args:
@@ -30,18 +30,18 @@ class TextRendmod(Rendmod, metaclass=ABCMeta):
 
         """
         params = {
-            "text_content": self._get_text_content(),
+            "date_content": self._get_date_content(),
         }
-
         if config == 'choice_1':
-            html = 'xmltemplate/builtin/text_type_1.html'
+            html = 'xmltemplate/builtin/date_type_1.html'
         elif config == 'choice_2':
-            html = 'xmltemplate/builtin/text_type_1.html'
-
-        return Rendmod.render_template(html, params)
+            html = 'xmltemplate/builtin/date_type_2.html'
+        else :
+            html = 'default.html'
+        return AbstractModule.render_template(html, params)
 
     @abstractmethod
-    def _get_text_content(self):
+    def _get_date_content(self):
         """ Process data to build the type
         """
         raise NotImplementedError("not implemented")

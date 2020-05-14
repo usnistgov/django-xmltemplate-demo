@@ -1,6 +1,6 @@
-class Rendmod(View, metaclass=ABCMeta):
+class AbstractModule(View, metaclass=ABCMeta):
 
-    def __init__(self, scripts=list(), styles=list(), data=None, config=None):
+    def __init__(self, scripts=list(), styles=list(), data=None, config=None, moduleid=None):
         """Initializes the type
 
         :param scripts    list:    list of javascript scripts
@@ -17,6 +17,7 @@ class Rendmod(View, metaclass=ABCMeta):
 
         # initialize configuration data
         self.config = config
+        self.module = moduleid
     def _get(self, request):
         """ Manage the GET requests
 
@@ -124,18 +125,6 @@ class Rendmod(View, metaclass=ABCMeta):
             return HttpResponse(json.dumps(response), status=HTTP_200_OK)
 
         @abstractmethod
-        def _render_type(self, request):
-            """ Render the type content
-
-            Args:
-                request:
-
-            Returns:
-
-            """
-            raise NotImplementedError("_render_type method is not implemented.")
-
-        @abstractmethod
         def _retrieve_data(self, request):
             """ Retrieve module's data
 
@@ -149,7 +138,7 @@ class Rendmod(View, metaclass=ABCMeta):
 
         @abstractmethod
         def _render_data(self, request):
-            """ Return the module's data representation
+            """ Re  turn the module's data representation
 
             Args:
                 request:
@@ -159,3 +148,19 @@ class Rendmod(View, metaclass=ABCMeta):
             """
             raise NotImplementedError("_render_data method is not implemented.")
 
+       @staticmethod
+        def render_template(template_name, context=None):
+            """ Renders the module in HTML using django template
+
+            Args:
+                template_name:
+                context:
+
+            Returns:
+
+            """
+            if context is None:
+                context = {}
+
+            template = get_template(template_name)
+            return template.render(context)
