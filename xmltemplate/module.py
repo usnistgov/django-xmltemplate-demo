@@ -112,9 +112,10 @@ class AbstractModule(View, metaclass=ABCMeta):
         if hasattr(self, "get_XpathAccessor"):
             response_dict.update(self.get_XpathAccessor())
 
-        return HttpResponse(json.dumps(response_dict))
+            return HttpResponse(json.dumps(response_dict))
 
-        def _get_resources(self):
+        @abstractmethod
+        def get_resources(self):
             """Returns HTTP response containing module resources
             """
             response = {
