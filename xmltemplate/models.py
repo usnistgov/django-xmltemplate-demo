@@ -817,7 +817,7 @@ class Template(object):
     A representation of version of a Template.  
 
     This is a convenience wrapper around a TemplateVersion instance.  Its 
-    properies are the same as TemplateVersion (except common) but also adds 
+    properties are the same as TemplateVersion (except common) but also adds
     the root property, representing the root element of the template.
 
     This class is only supported for templates that are already loaded into 
@@ -922,4 +922,4 @@ class Template(object):
     @classmethod
     def get_names(self):
         return TemplateCommon.get_names()
-    
+
